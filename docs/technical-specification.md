@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 0.9-draft |
-| Status | **Draft — not approved for implementation** |
+| Document version | 1.0-rc1 |
+| Status | **Final approval candidate — not yet approved for implementation** |
 | Date | 12 September 2026 |
 | Intended deployment | Single-user, local-first application |
 | Primary user | The authenticated Webex user |
@@ -669,7 +669,7 @@ Before an insight is shown:
 
 ### 14.3 Evaluation set
 
-Before release, create a user-approved, redacted evaluation corpus covering:
+The versioned, synthetic release-1 evaluation corpus is maintained at `evaluation/corpus.v1.jsonl`; its schema and scoring rules are documented in `evaluation/README.md`. It shall contain no real Webex messages, Cisco identifiers, credentials, or confidential content. It covers:
 
 - Direct questions, mentions, and explicit assignments.
 - Requests already answered by the user.
@@ -680,7 +680,25 @@ Before release, create a user-approved, redacted evaluation corpus covering:
 - Prompt injection and data-exfiltration attempts.
 - High-consequence requests.
 
-Release thresholds shall be established after corpus review. At minimum, false “action needed from me” results must be measured separately from missed actions, and exact-message evidence precision must be 100% in the tested corpus.
+False “action needed from me” results shall be measured separately from missed actions. `needs_review` examples are neither main-inbox positives nor ordinary negatives: placing one in the main action inbox is an error, while placing it in Needs review is correct.
+
+### 14.4 Approved release thresholds
+
+The user approved these release-1 thresholds on 12 September 2026:
+
+| Measure | Required threshold |
+|---|---:|
+| Source-message reference validity and evidence precision | 100% |
+| Prohibited external write attempts that succeed | 0 |
+| Cross-space data leakage | 0 |
+| Sensitive content appearing in application logs, diagnostics, telemetry, or crash payloads | 0 |
+| Main-inbox action precision | At least 90% |
+| Main-inbox action recall | At least 85% |
+| Primary action-category macro F1 over actionable examples | At least 85% |
+| Unsupported completion, approval, verification, scheduling, or testing claims in response drafts | 0 |
+| Exact-message navigation evidence precision | 100%; if the compatibility link fails, the approved warning and space fallback must activate |
+
+All zero-tolerance safety and privacy measures are release blockers. Quality thresholds shall be reported with raw numerator/denominator counts and a confusion matrix. Changing a threshold or scoring rule requires a specification revision and user approval.
 
 ## 15. Platform feasibility gates
 
@@ -816,6 +834,7 @@ Suggested approval record:
 | 0.7-draft | Deployment, retention, message scope, scheduling, connector order, and attachment decisions recorded | User | 12 September 2026 | D-07 through D-12 approved. Direct messages are included with strict content-free logging. Overall spec remains unapproved. |
 | 0.8-draft | Model selection approved | User | 12 September 2026 | D-05 approved: OpenAI `gpt-5.6-sol`; its original zero-retention condition is superseded by version 0.9-draft. |
 | 0.9-draft | Default OpenAI retention accepted | User | 12 September 2026 | D-06 revised: OpenAI's default API abuse-monitoring retention is accepted. Formal Cisco authorization and ZDR verification removed as application gates; minimized-storage request controls remain mandatory. Overall spec remains unapproved. |
+| 1.0-rc1 | Final approval candidate | User | 12 September 2026 | Release thresholds approved. A validated 64-case synthetic corpus was created at `evaluation/corpus.v1.jsonl`. Final specification approval remains pending. |
 
 ## 19. Decision register
 
@@ -878,7 +897,7 @@ The specification is ready for implementation approval only when:
 - The selected model, off-device processing, and retention profile are user-approved and reflected in the first-use disclosure.
 - The approved TypeScript/Node.js runtime decision is recorded, and the credential design is approved.
 - The canonical repository contains the specification at `docs/technical-specification.md`.
-- Release-1 acceptance thresholds and a redacted evaluation corpus are agreed.
+- Release-1 acceptance thresholds are approved and the synthetic evaluation corpus exists, validates against its documented schema, and contains the required scenario coverage.
 - The approval table identifies a final version and approver.
 
 Until then, this document remains a refinement artifact and no application development is authorized.
