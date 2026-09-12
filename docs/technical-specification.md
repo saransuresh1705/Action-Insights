@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 0.6-draft |
+| Document version | 0.7-draft |
 | Status | **Draft — not approved for implementation** |
 | Date | 12 September 2026 |
 | Intended deployment | Single-user, local-first application |
@@ -123,9 +123,13 @@ A message or message thread that the application believes may require attention 
 
 **FR-SPACE-06** The app shall show spaces it can no longer access and allow removal from a collection without deleting historical derived insights unless the user chooses to do so.
 
+**FR-SPACE-07** Direct-message spaces shall be included in the release-1 space catalog and default monitoring scope. The user may deselect individual direct-message spaces or exclude all direct messages. Their inclusion does not relax any privacy, isolation, logging, retention, or external-processing control.
+
 ### 6.3 Scheduling and ingestion
 
 **FR-SCAN-01** The user shall configure a global scan interval and optional per-collection overrides.
+
+**FR-SCAN-01A** In release 1, scheduled scans run only while the application is open. The UI shall explain that closing the app pauses monitoring. Installing or enabling an operating-system background service requires a future specification revision and separate user approval.
 
 **FR-SCAN-02** Supported presets shall include manual, 15 minutes, 30 minutes, 1 hour, 2 hours, 4 hours, and daily. A custom interval shall be allowed with a safe minimum of 5 minutes.
 
@@ -133,7 +137,7 @@ A message or message thread that the application believes may require attention 
 
 **FR-SCAN-04** If the local app is stopped or the computer sleeps, missed runs shall not stack. One catch-up run shall begin after restart/wake, followed by the normal schedule.
 
-**FR-SCAN-05** Initial backfill shall be configurable: 7, 30, 90, 180, or 365 days, or full available history. “Full available history” shall require a warning about duration, rate limits, model usage, and local data volume.
+**FR-SCAN-05** Initial backfill shall default to the user-approved 30 days and be configurable to 7, 90, 180, or 365 days, or full available history. “Full available history” shall require a warning about duration, rate limits, model usage, and local data volume.
 
 **FR-SCAN-06** Subsequent scans shall be incremental using a per-space high-water mark. Overlap shall be used to tolerate clock skew, late edits, threads, and eventual consistency; processing shall be idempotent by message ID plus content version/hash.
 
@@ -145,7 +149,7 @@ A message or message thread that the application believes may require attention 
 
 **FR-SCAN-10** Message deletions and edits detected by subsequent retrieval shall mark linked insights stale or update them; source text shall not be silently retained after deletion beyond the configured retention policy.
 
-**FR-SCAN-11** File metadata may be recorded, but file contents and linked web pages shall not be downloaded in release 1 unless separately enabled in a future approved spec revision.
+**FR-SCAN-11** File attachments shall not be downloaded or analyzed in release 1. Minimal attachment metadata required to show that a source message contains an attachment may be recorded locally, but shall not be sent to a model or connector. Any attachment-content analysis requires a future approved specification revision.
 
 ### 6.4 Context preparation
 
@@ -385,8 +389,8 @@ Use a local SQLite database for non-secret configuration, sync cursors, message 
 
 Recommended defaults:
 
-- Raw message text: retain 30 days.
-- Derived summaries and actions: retain 90 days.
+- Raw message text: retain the user-approved 30 days.
+- Derived summaries and actions: retain the user-approved 90 days.
 - Audit metadata without message content: retain 180 days.
 - Connector raw payloads: do not persist; retain normalized evidence references only.
 - Deleted source messages: purge cached text at the next reconciliation, subject to a short diagnostic tombstone containing only ID/hash and deletion time.
@@ -586,11 +590,11 @@ Targets apply to a reference workload of 100 selected spaces and 5,000 new messa
 
 ### 12.4 Observability
 
-Local diagnostics shall include scan timing, API status codes, retry counts, space coverage, model usage, connector calls, policy denials, and software version. Message bodies and secrets shall be excluded by default.
+Local diagnostics shall include scan timing, API status codes, retry counts, space coverage, model usage, connector calls, policy denials, and software version. Message bodies, message snippets, attachment names/content, person names, email addresses, direct-space titles, space titles, URLs, connector payloads, model prompts/responses, and secrets shall never be written to diagnostic or application logs. Stable identifiers shall be locally keyed hashes when correlation is required. Logging shall use allow-listed structured fields rather than redaction as the primary protection; redaction remains a defense in depth.
 
 ### 12.5 Compatibility
 
-- Initial target: current macOS desktop with a current Chromium-, Safari-, or Firefox-based browser.
+- Initial target: user-approved personal, local deployment on current macOS with a current Chromium-, Safari-, or Firefox-based browser.
 - Webex desktop and web-client navigation shall be tested separately.
 - Other operating systems and mobile UI are out of scope until approved.
 
@@ -615,6 +619,8 @@ Each connector adapter exposes only normalized read operations, for example:
 - Other Cisco tools: individually specified and approved operations.
 
 Connector output shall include source system, stable item ID, title, URL, retrieval time, and authorization scope. Connector-specific secrets and access controls remain independent.
+
+**Approved implementation sequence:** Jira read-only is the first connector. GitHub and Confluence follow after Jira meets its acceptance criteria. SharePoint follows only after enterprise authentication and data-handling feasibility are validated. The sequence does not enable any connector write operation and may be changed only through the specification-first process.
 
 ### 13.3 Model provider
 
@@ -748,6 +754,7 @@ OS credential storage with non-secret references in the local configuration file
 - Repository secret scan finds no credentials.
 - Browser network inspection finds no secret exposure.
 - Logs and exports pass secret/PII redaction tests.
+- Canary tests place unique message text, names, email addresses, direct-space titles, attachment names, URLs, prompt text, and connector content into test inputs and verify that none appears in application logs, diagnostics, telemetry, or crash-report payloads.
 - Prompt-injection tests cannot change tool permissions, retrieve other spaces, or invoke writes.
 - Cross-space isolation tests pass.
 - Local server rejects non-loopback access by default.
@@ -812,6 +819,7 @@ Suggested approval record:
 | 0.4-draft | Credential decision recorded | User | 12 September 2026 | P0-04 and D-14 approved: OS credential store with non-secret config references; plaintext credential files excluded. Overall spec remains unapproved. |
 | 0.5-draft | Section-mirroring decision recorded | User | 12 September 2026 | P0-01 and D-01 approved: app-local Watched Collections shall mirror Webex sections. Overall spec remains unapproved. |
 | 0.6-draft | Navigation, summary, and data-path decisions recorded | User | 12 September 2026 | D-02, D-03, and D-06 approved. D-05 recommendation is `gpt-5.6-sol`, pending user and enterprise approval. Overall spec remains unapproved. |
+| 0.7-draft | Deployment, retention, message scope, scheduling, connector order, and attachment decisions recorded | User | 12 September 2026 | D-07 through D-12 approved. Direct messages are included with strict content-free logging. Overall spec remains unapproved. |
 
 ## 19. Open decisions for the next review
 
@@ -823,12 +831,12 @@ Suggested approval record:
 | D-04 | Approve TypeScript/Node.js for the local service and browser code? | **Approved by the user on 12 September 2026.** |
 | D-05 | Which model endpoint is approved for Cisco message content? | **Recommendation pending user and enterprise approval:** OpenAI `gpt-5.6-sol` through the Responses API with the §13.4 zero-retention profile. |
 | D-06 | May any message content leave the device, and under what classification rules? | **Approved by the user on 12 September 2026:** transient off-device processing is permitted, but message content shall not be stored outside the device; enforce §13.4 and fail closed. |
-| D-07 | Is macOS-only release 1 acceptable? | Yes for a personal local deployment. |
-| D-08 | Default initial backfill and retention? | 30-day backfill; 30-day raw, 90-day derived retention. |
-| D-09 | Include direct messages by default? | No; explicit opt-in because they may be more sensitive. |
-| D-10 | Should local scans run only while the app is open, or via an installed background service? | App-open for first release; background service requires a separate installation decision. |
-| D-11 | Which connector should be implemented first? | Jira read-only, then GitHub and Confluence; SharePoint after enterprise auth feasibility. |
-| D-12 | Should file attachments ever be analyzed? | No in release 1. |
+| D-07 | Is macOS-only release 1 acceptable? | **Approved by the user on 12 September 2026:** yes, for a personal local deployment. |
+| D-08 | Default initial backfill and retention? | **Approved by the user on 12 September 2026:** 30-day backfill, 30-day raw-message retention, and 90-day derived-insight retention. |
+| D-09 | Include direct messages by default? | **Approved by the user on 12 September 2026:** include direct messages, while prohibiting sensitive message or identity content from logs, diagnostics, telemetry, and crash reports. |
+| D-10 | Should local scans run only while the app is open, or via an installed background service? | **Approved by the user on 12 September 2026:** app-open only; a background service requires a separate installation decision and approved specification revision. |
+| D-11 | Which connector should be implemented first? | **Approved by the user on 12 September 2026:** Jira read-only, then GitHub and Confluence; SharePoint after enterprise authentication feasibility. |
+| D-12 | Should file attachments ever be analyzed? | **Approved by the user on 12 September 2026:** no attachment-content analysis in release 1. |
 | D-13 | Which repository is canonical for specification and application code? | **Approved by the user on 12 September 2026:** `https://github.com/saransuresh1705/Action-Insights`. |
 | D-14 | How shall OAuth tokens, client secrets, API keys, and connector secrets be stored? | **Approved by the user on 12 September 2026:** OS credential store; local configuration contains references only. Plaintext secret files are excluded. |
 
@@ -845,6 +853,7 @@ Suggested approval record:
 | Sensitive data sent to model | Privacy/compliance issue. | Approved ZDR project, `store: false`, stateless foreground requests, caching disabled, data minimization, local redaction, prohibited persistent endpoints, and fail-closed preflight. |
 | Credential theft | Unauthorized access. | OS credential store, loopback-only service, no browser exposure, redaction, rotation/revocation. |
 | Cross-space leakage in summaries | Confidentiality breach. | Per-space partitions, evidence validation, isolation tests. |
+| Sensitive direct-message content appears in logs | Confidentiality breach. | Content-free allow-listed structured logging, keyed identifier hashes, automated log-capture tests, and no externally transmitted diagnostics. |
 | Recommendations mistaken for completed work | Miscommunication. | Explicit labels, no completion claims, no automatic resolve, no send/write capability. |
 
 ## 21. External platform findings and references
