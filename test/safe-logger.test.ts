@@ -42,3 +42,17 @@ test("replaces unapproved event names so content cannot leak through the event f
   assert.match(lines[0] ?? "", /"event":"unknown_event"/);
   assert.match(lines[0] ?? "", /"errorCode":"SAFE_CODE"/);
 });
+
+test("rejects unsafe values even when they use an allow-listed field name", () => {
+  const lines: string[] = [];
+  const logger = new SafeLogger((line) => lines.push(line));
+
+  logger.info("scan_completed", {
+    status: "CANARY_MESSAGE_SMUGGLED_IN_STATUS",
+    errorCode: "CANARY MESSAGE WITH SPACES",
+    spacesTotal: 3,
+  });
+
+  assert.equal(lines[0]?.includes("CANARY"), false);
+  assert.match(lines[0] ?? "", /"spacesTotal":3/);
+});

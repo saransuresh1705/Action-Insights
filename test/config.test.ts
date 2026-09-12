@@ -44,6 +44,16 @@ test("rejects any attempt to enable model response storage", () => {
   assert.throws(() => validateConfiguration(fixture), /model.store must be false/);
 });
 
+test("rejects Webex write scopes and non-loopback OAuth callbacks", () => {
+  const writeScopeFixture = configurationFixture() as { webex: { scopes: string[] } };
+  writeScopeFixture.webex.scopes = [...writeScopeFixture.webex.scopes, "spark:messages_write"];
+  assert.throws(() => validateConfiguration(writeScopeFixture), /approved read-only scopes/);
+
+  const callbackFixture = configurationFixture() as { webex: { oauthRedirectUri: string } };
+  callbackFixture.webex.oauthRedirectUri = "https://attacker.example/oauth/webex/callback";
+  assert.throws(() => validateConfiguration(callbackFixture), /loopback service callback/);
+});
+
 test("public configuration cannot expose credential references", () => {
   const publicView = publicConfiguration(DEFAULT_CONFIGURATION);
   const serialized = JSON.stringify(publicView);

@@ -1,0 +1,84 @@
+import type { DatabaseSync } from "node:sqlite";
+
+interface Migration {
+  readonly version: number;
+  readonly sql: string;
+}
+
+export const STORAGE_MIGRATIONS: readonly Migration[] = [
+  {
+    version: 1,
+    sql: `
+      CREATE TABLE spaces (
+        id TEXT PRIMARY KEY,
+        title_encrypted BLOB NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('direct', 'group')),
+        last_activity TEXT,
+        access_status TEXT NOT NULL CHECK(access_status IN ('active', 'unavailable')),
+        selected INTEGER NOT NULL CHECK(selected IN (0, 1)),
+        discovered_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) STRICT;
+      CREATE TABLE watched_collections (
+        id TEXT PRIMARY KEY,
+        name_encrypted BLOB NOT NULL,
+        description_encrypted BLOB NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      ) STRICT;
+      CREATE TABLE collection_spaces (
+        collection_id TEXT NOT NULL REFERENCES watched_collections(id) ON DELETE CASCADE,
+        room_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+        included_at TEXT NOT NULL,
+        PRIMARY KEY (collection_id, room_id)
+      ) STRICT;
+      CREATE TABLE sync_cursors (
+        room_id TEXT PRIMARY KEY REFERENCES spaces(id) ON DELETE CASCADE,
+        high_watermark TEXT NOT NULL,
+        content_hash TEXT,
+        last_result TEXT NOT NULL CHECK(last_result IN ('complete', 'partial')),
+        updated_at TEXT NOT NULL
+      ) STRICT;
+      CREATE TABLE message_refs (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+        parent_id TEXT,
+        author_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        content_hash TEXT NOT NULL,
+        text_encrypted BLOB,
+        has_attachments INTEGER NOT NULL CHECK(has_attachments IN (0, 1)),
+        deletion_state TEXT NOT NULL CHECK(deletion_state IN ('present', 'deleted')),
+        retained_at TEXT NOT NULL
+      ) STRICT;
+      CREATE INDEX message_refs_room_created ON message_refs(room_id, created_at);
+    `,
+  },
+];
+
+export function applyStorageMigrations(database: DatabaseSync): void {
+  database.exec(`
+    PRAGMA foreign_keys = ON;
+    PRAGMA journal_mode = WAL;
+    PRAGMA secure_delete = ON;
+    PRAGMA trusted_schema = OFF;
+  `);
+  const current = database.prepare("PRAGMA user_version").get() as { user_version: number };
+  const latest = STORAGE_MIGRATIONS.at(-1)?.version ?? 0;
+  if (current.user_version > latest) {
+    throw new Error("Local database schema is newer than this application version");
+  }
+  for (const migration of STORAGE_MIGRATIONS) {
+    if (migration.version <= current.user_version) continue;
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      database.exec(migration.sql);
+      database.exec(`PRAGMA user_version = ${migration.version}`);
+      database.exec("COMMIT");
+    } catch (error: unknown) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+}

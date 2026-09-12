@@ -1,12 +1,12 @@
 {
   "name": "webex-action-insights",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "description": "Local-first, read-only Webex conversation insights application.",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.build.json && node scripts/copy-static.mjs",

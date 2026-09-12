@@ -14,14 +14,18 @@ The current foundation includes:
 - loopback-only HTTP serving with session-protected local APIs;
 - strict configuration validation with OS Keychain credential references;
 - a deny-by-default action policy that permits reads and local drafts only;
-- structured, allow-listed logging that excludes message and identity content; and
-- the initial accessible dashboard shell.
+- structured, allow-listed logging that excludes message and identity content;
+- Webex OAuth with exact state validation and server-only token refresh;
+- GET-only space and message adapters with safe pagination and rate-limit handling;
+- encrypted SQLite storage for message text and sensitive display names;
+- app-local Watched Collections and manual incremental scans; and
+- an accessible local dashboard for connection, discovery, selection, and scan progress.
 
-Webex OAuth, message ingestion, the encrypted local data store, model orchestration, and read-only enterprise connectors are the next implementation slices.
+Collection management refinements, deletion reconciliation, derived-data retention, model orchestration, and read-only enterprise connectors remain future implementation slices.
 
 ## Prerequisites
 
-- Node.js 22.12 or later
+- Node.js 22.13 or later
 - pnpm 11
 
 ## Local development
@@ -37,6 +41,22 @@ pnpm start
 Open `http://127.0.0.1:4318`. The service never binds to a non-loopback interface.
 
 The example configuration contains only non-secret values and OS Keychain references. Do not put tokens, client secrets, message content, or personal data in configuration files. Machine-local configuration files are ignored by Git.
+
+## Webex OAuth setup
+
+1. Create a Webex Integration in [My Webex Apps](https://developer.webex.com/my-apps/new/integration).
+2. Register `http://127.0.0.1:4318/oauth/webex/callback` as its redirect URI.
+3. Select only `spark:messages_read`, `spark:rooms_read`, and `spark:people_read`. Webex also requires `spark:kms` when encrypted message content is read.
+4. Put the non-secret client ID in `~/.config/webex-action-insights/config.json`.
+5. Store the client secret in macOS Keychain using the prompt-based command below. Enter the secret only when Keychain prompts; it is not placed in the command or shell history.
+
+```sh
+security add-generic-password -U -a webex-oauth -s webex-action-insights -w
+```
+
+After OAuth completes, access and refresh tokens are kept in the same Keychain item. Disconnect removes those tokens while retaining the integration client secret so the account can be reconnected.
+
+The application never downloads Webex attachments. It records only whether a message has an attachment.
 
 ## Commands
 

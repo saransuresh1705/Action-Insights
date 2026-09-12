@@ -28,8 +28,24 @@
             without sending or changing anything on your behalf.
           </p>
         </div>
-        <button type="button" disabled aria-describedby="scan-help">Scan now</button>
-        <p id="scan-help" class="muted">Webex connection is part of the next implementation slice.</p>
+        <button id="scan-now" type="button" disabled aria-describedby="scan-help">Scan now</button>
+        <p id="scan-help" class="muted">Select spaces before running the first scan.</p>
+      </section>
+
+      <section class="connection-panel" aria-labelledby="connection-title">
+        <div>
+          <p class="eyebrow">Read-only connection</p>
+          <h2 id="connection-title">Webex account</h2>
+          <p id="webex-identity">Checking local OAuth configuration…</p>
+          <p id="webex-scopes" class="muted"></p>
+        </div>
+        <div class="button-row">
+          <button id="webex-connect" type="button" disabled>Connect Webex</button>
+          <button id="webex-disconnect" class="button-secondary" type="button" hidden>Disconnect</button>
+        </div>
+        <p id="webex-help" class="notice" role="status" aria-live="polite">
+          Tokens and the OAuth client secret remain in macOS Keychain and are never sent to browser code.
+        </p>
       </section>
 
       <section aria-labelledby="overview-title">
@@ -68,13 +84,43 @@
         <article class="panel">
           <p class="eyebrow">Action inbox</p>
           <h2>No actions yet</h2>
-          <p>Connect Webex and choose Watched Collections to begin.</p>
+          <p id="scan-status">Connect Webex and choose Watched Collections to begin.</p>
         </article>
         <article class="panel">
           <p class="eyebrow">Scope</p>
           <h2>Direct messages</h2>
           <p id="direct-message-status">Loading…</p>
         </article>
+      </section>
+
+      <section aria-labelledby="spaces-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Space catalog</p>
+            <h2 id="spaces-title">Available Webex spaces</h2>
+          </div>
+          <button id="refresh-spaces" class="button-secondary" type="button" disabled>Refresh spaces</button>
+        </div>
+        <p class="muted">Direct and group spaces are discovered read-only. Nothing is selected or scanned automatically.</p>
+        <div class="collection-controls" aria-labelledby="collections-title">
+          <div>
+            <label id="collections-title" for="collection-select">Watched Collection</label>
+            <select id="collection-select" disabled>
+              <option value="">Create a collection to select spaces</option>
+            </select>
+          </div>
+          <form id="collection-form">
+            <label for="collection-name">New collection</label>
+            <div class="inline-form">
+              <input id="collection-name" name="name" maxlength="80" required placeholder="e.g. My priorities" />
+              <button type="submit">Create</button>
+            </div>
+          </form>
+          <button id="save-collection-spaces" type="button" disabled>Save selected spaces</button>
+        </div>
+        <div id="space-list" class="space-list" aria-live="polite">
+          <p>Connect Webex to load your spaces.</p>
+        </div>
       </section>
     </main>
 

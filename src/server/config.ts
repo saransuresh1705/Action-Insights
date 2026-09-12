@@ -5,6 +5,7 @@ import type { PublicConfiguration, ReasoningEffort } from "../shared/contracts.j
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 const BACKFILL_OPTIONS = new Set([7, 30, 90, 180, 365]);
+export const WEBEX_READ_SCOPES = ["spark:messages_read", "spark:people_read", "spark:rooms_read", "spark:kms"] as const;
 
 export interface AppConfiguration {
   readonly app: {
@@ -22,8 +23,14 @@ export interface AppConfiguration {
     readonly derivedInsightDays: number;
     readonly auditMetadataDays: number;
   };
+  readonly storage: {
+    readonly dataDirectory: string;
+    readonly encryptionKeyRef: string;
+  };
   readonly webex: {
     readonly oauthClientId: string;
+    readonly oauthRedirectUri: string;
+    readonly scopes: readonly string[];
     readonly credentialRef: string;
   };
   readonly model: {
@@ -51,8 +58,14 @@ export const DEFAULT_CONFIGURATION: AppConfiguration = {
     derivedInsightDays: 90,
     auditMetadataDays: 180,
   },
+  storage: {
+    dataDirectory: "~/Library/Application Support/Webex Action Insights",
+    encryptionKeyRef: "os-keychain://webex-action-insights/local-data-key",
+  },
   webex: {
     oauthClientId: "not-configured",
+    oauthRedirectUri: "http://127.0.0.1:4318/oauth/webex/callback",
+    scopes: WEBEX_READ_SCOPES,
     credentialRef: "os-keychain://webex-action-insights/webex-oauth",
   },
   model: {
@@ -95,6 +108,32 @@ function integerValue(value: unknown, label: string, minimum: number, maximum: n
   return value as number;
 }
 
+function stringArray(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string" || entry.trim() === "")) {
+    throw new Error(`${label} must be an array of non-empty strings`);
+  }
+  return value as string[];
+}
+
+function oauthRedirectUri(value: unknown, bindHost: string, port: number): string {
+  const text = stringValue(value, "webex.oauthRedirectUri");
+  const url = new URL(text);
+  const expectedPort = port === 80 ? "" : String(port);
+  if (
+    url.protocol !== "http:" ||
+    url.hostname !== bindHost ||
+    url.port !== expectedPort ||
+    url.pathname !== "/oauth/webex/callback" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.search !== "" ||
+    url.hash !== ""
+  ) {
+    throw new Error("webex.oauthRedirectUri must match the loopback service callback");
+  }
+  return url.toString();
+}
+
 function credentialReference(value: unknown, label: string): string {
   const reference = stringValue(value, label);
   if (!reference.startsWith("os-keychain://") || reference.includes("@")) {
@@ -108,14 +147,16 @@ export function validateConfiguration(value: unknown): AppConfiguration {
   const app = asRecord(root.app, "app");
   const scan = asRecord(root.scan, "scan");
   const retention = asRecord(root.retention, "retention");
+  const storage = asRecord(root.storage, "storage");
   const webex = asRecord(root.webex, "webex");
   const model = asRecord(root.model, "model");
 
-  assertOnlyKeys(root, ["app", "scan", "retention", "webex", "model"], "configuration");
+  assertOnlyKeys(root, ["app", "scan", "retention", "storage", "webex", "model"], "configuration");
   assertOnlyKeys(app, ["bindHost", "port", "timezone"], "app");
   assertOnlyKeys(scan, ["intervalMinutes", "initialBackfillDays", "overlapMinutes"], "scan");
   assertOnlyKeys(retention, ["rawMessageDays", "derivedInsightDays", "auditMetadataDays"], "retention");
-  assertOnlyKeys(webex, ["oauthClientId", "credentialRef"], "webex");
+  assertOnlyKeys(storage, ["dataDirectory", "encryptionKeyRef"], "storage");
+  assertOnlyKeys(webex, ["oauthClientId", "oauthRedirectUri", "scopes", "credentialRef"], "webex");
   assertOnlyKeys(model, ["provider", "name", "reasoningEffort", "store", "credentialRef"], "model");
 
   const bindHost = stringValue(app.bindHost, "app.bindHost");
@@ -138,10 +179,16 @@ export function validateConfiguration(value: unknown): AppConfiguration {
     throw new Error("model.store must be false");
   }
 
+  const port = integerValue(app.port, "app.port", 1, 65_535);
+  const scopes = stringArray(webex.scopes, "webex.scopes");
+  if (new Set(scopes).size !== WEBEX_READ_SCOPES.length || WEBEX_READ_SCOPES.some((scope) => !scopes.includes(scope))) {
+    throw new Error("webex.scopes must contain only the approved read-only scopes");
+  }
+
   return {
     app: {
       bindHost,
-      port: integerValue(app.port, "app.port", 1, 65_535),
+      port,
       timezone: stringValue(app.timezone, "app.timezone"),
     },
     scan: {
@@ -154,8 +201,14 @@ export function validateConfiguration(value: unknown): AppConfiguration {
       derivedInsightDays: integerValue(retention.derivedInsightDays, "retention.derivedInsightDays", 1, 730),
       auditMetadataDays: integerValue(retention.auditMetadataDays, "retention.auditMetadataDays", 1, 730),
     },
+    storage: {
+      dataDirectory: stringValue(storage.dataDirectory, "storage.dataDirectory"),
+      encryptionKeyRef: credentialReference(storage.encryptionKeyRef, "storage.encryptionKeyRef"),
+    },
     webex: {
       oauthClientId: stringValue(webex.oauthClientId, "webex.oauthClientId"),
+      oauthRedirectUri: oauthRedirectUri(webex.oauthRedirectUri, bindHost, port),
+      scopes,
       credentialRef: credentialReference(webex.credentialRef, "webex.credentialRef"),
     },
     model: {

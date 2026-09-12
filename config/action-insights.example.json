@@ -14,8 +14,19 @@
     "derivedInsightDays": 90,
     "auditMetadataDays": 180
   },
+  "storage": {
+    "dataDirectory": "~/Library/Application Support/Webex Action Insights",
+    "encryptionKeyRef": "os-keychain://webex-action-insights/local-data-key"
+  },
   "webex": {
     "oauthClientId": "replace-with-non-secret-client-id",
+    "oauthRedirectUri": "http://127.0.0.1:4318/oauth/webex/callback",
+    "scopes": [
+      "spark:messages_read",
+      "spark:people_read",
+      "spark:rooms_read",
+      "spark:kms"
+    ],
     "credentialRef": "os-keychain://webex-action-insights/webex-oauth"
   },
   "model": {
