@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 0.5-draft |
+| Document version | 0.6-draft |
 | Status | **Draft — not approved for implementation** |
 | Date | 12 September 2026 |
 | Intended deployment | Single-user, local-first application |
@@ -45,7 +45,7 @@ The application is an analysis and decision-support tool. Release 1 does **not**
 |---|---|---|
 | UR-01 | Read messages across all Webex spaces at configurable intervals. | Supported for explicitly selected spaces. “All joined spaces” may be enabled, but new spaces require a visible opt-in policy. Incremental reads and configurable backfill are required. |
 | UR-02 | Summarize each space in configurable Webex sections. | Supported through app-managed **Watched Collections** that mirror Webex sections. This release-1 approach was approved by the user on 12 September 2026 because no public native-section API has been identified. |
-| UR-03 | Highlight action messages and space; link to the specific message. | Feasible for the macOS Webex desktop client through a `webexteams:` exact-message URI. The message parameter is not publicly documented by Cisco, so implementation must use the validated compatibility adapter and tests in §6.10 and §15. A space-level fallback shall remain available. |
+| UR-03 | Highlight action messages and space; link to the specific message. | Feasible for the macOS Webex desktop client through a `webexteams:` exact-message URI. The message parameter is not publicly documented by Cisco, so implementation must use the validated compatibility adapter and tests in §6.10 and §15. If compatibility fails, the user-approved fallback opens the space and shows a warning plus timestamp, author, snippet, and copyable source reference. |
 | UR-04 | Identify action type and suggest categories. | Supported through the taxonomy in §6.7. |
 | UR-05 | Generate response drafts with copy option. | Supported. Copy only; no Send button in release 1. |
 | UR-06 | Recommend actions and use Jira/GitHub/Confluence/SharePoint/Cisco tools. | Supported through allow-listed, read-only connectors. Recommendations must cite retrieved evidence. |
@@ -181,6 +181,8 @@ A message or message thread that the application believes may require attention 
 
 **FR-SUM-05** The app shall support “Copy summary” and export of a user-selected summary. It shall not post summaries into Webex in release 1.
 
+**FR-SUM-06** Summaries shall be displayed in this application. Release 1 shall not post a summary, summary link, notification, or status message into Webex; doing so would violate the release-1 no-write posture.
+
 ### 6.6 Action detection
 
 **FR-ACT-01** An item shall be considered a user action candidate only when there is evidence that the authenticated user is the intended owner, approver, respondent, or necessary participant.
@@ -283,7 +285,7 @@ The adapter shall derive the UUIDs only from validated Webex API identifiers. Un
 
 **FR-LINK-03** “Open exact message in Webex” shall use a normal user-initiated hyperlink and clearly state that it opens the Webex desktop app. The app shall never launch Webex automatically. The browser may ask the user to confirm the external-app launch.
 
-**FR-LINK-04** If exact-message navigation is unsupported, fails, or is disabled, the fallback shall use the documented space URI and display author, timestamp, snippet, and a copyable source reference. The action card shall label this as “Open space,” not imply exact navigation, and retain a “Copy source reference” control.
+**FR-LINK-04** If exact-message navigation is unsupported, fails, or is disabled, the user-approved fallback shall use the documented space URI and display author, timestamp, snippet, and a copyable source reference. The action card shall label this as “Open space,” not imply exact navigation, retain a “Copy source reference” control, and show a compatibility warning explaining that Webex could not open the exact message.
 
 **FR-LINK-05** No exact-message HTTPS URL for the Webex web client has been confirmed. Release 1 shall not fabricate one. Web-client exact navigation remains out of scope unless Cisco documents a stable format or a later approved compatibility test establishes one.
 
@@ -473,7 +475,10 @@ webex:
   oauth_client_id: non-secret-client-id
   credential_ref: os-keychain://webex-action-insights/webex-oauth
 model:
-  provider: pending-approval
+  provider: openai
+  model: gpt-5.6-sol # recommendation; pending user and enterprise approval
+  reasoning_effort: medium
+  store: false
   credential_ref: os-keychain://webex-action-insights/model
 connectors:
   jira:
@@ -548,7 +553,10 @@ Such items shall receive a “High-consequence — human review required” bann
 - Encrypted retained message content and local backups only when explicitly configured.
 - No telemetry containing message text, names, space titles, URLs, or connector payloads.
 - Crash reports are opt-in and scrubbed.
-- Model-provider data handling, retention, region, and enterprise approval must be reviewed before configuration.
+- Message content may leave the device only for transient processing by an approved model endpoint or approved read-only connector. It shall not be persistently stored outside the device.
+- Model-provider data handling, retention, region, safety-retention exceptions, and enterprise approval must be verified before model access is enabled.
+- If the required zero-retention controls cannot be verified at runtime or deployment approval time, external model calls shall fail closed and local ingestion/review shall remain available without AI analysis.
+- No prompt, response, model cache, trace, or raw connector payload containing message content may be written to external logs, observability systems, evaluation stores, or backups.
 
 ## 12. Non-functional requirements
 
@@ -610,17 +618,39 @@ Connector output shall include source system, stable item ID, title, URL, retrie
 
 ### 13.3 Model provider
 
-The model provider is intentionally undecided. Before implementation, the user and relevant Cisco data-governance owner must approve:
+**D-05 recommendation, pending approval:** use OpenAI `gpt-5.6-sol` through the Responses API. Within the GPT-5.6 family, this is the recommended quality-first choice for the core summarization, classification, drafting, and bounded tool-planning workload. Use structured outputs and function calling through the provider adapter. Use `medium` reasoning for routine scans and allow a policy-controlled escalation to `high` for ambiguous or high-consequence analysis; the model still cannot execute an action.
+
+`gpt-5.6-terra` is a future cost/latency optimization candidate and `gpt-5.6-luna` is a future high-volume, cost-sensitive candidate. Neither should replace the quality baseline until evaluation against the approved corpus shows that it meets the same safety and accuracy thresholds.
+
+Before implementation, the user and relevant Cisco data-governance owner must approve:
 
 - Provider and model.
 - Hosting/region and enterprise agreement.
 - Data retention and training policy.
 - Maximum context and usage budget.
-- Whether message content may leave the local device.
+- The zero-retention data path specified in §13.4.
 - Structured-output and tool-use capabilities.
 - Redaction requirements.
 
 The application shall use a provider adapter so the orchestration and policy layer does not depend on one model vendor.
+
+### 13.4 External processing and zero-retention profile
+
+**D-06 approved by the user on 12 September 2026:** message content may leave the device for transient processing, but it shall not be stored anywhere outside the device.
+
+The OpenAI deployment profile shall therefore meet all of the following requirements before model calls are enabled:
+
+- Use a Cisco-approved OpenAI API organization/project for which **Zero Data Retention (ZDR)** has been enabled and verified. Standard API abuse-monitoring retention, which may retain customer content for up to 30 days, does not satisfy D-06.
+- Use foreground, stateless `POST /v1/responses` requests with `store: false`. Do not use `previous_response_id` or any server-side conversation state.
+- Do not use Conversations, Assistants/Threads, Files, Vector Stores, Batch, background mode, hosted Code Interpreter, or another feature that persists application state or is not eligible for ZDR.
+- Disable implicit prompt caching for GPT-5.6 by setting `prompt_cache_options.mode` to `explicit` and providing no cache key or cache breakpoints. Prompts and reusable context remain local.
+- Do not configure OpenAI-hosted remote MCP tools. The local policy broker invokes approved read-only connectors, applies minimization/redaction, and supplies only the necessary normalized result to the model request.
+- Do not opt API data into model training or feedback sharing. Do not attach message-bearing payloads to support tickets, eval services, tracing systems, or third-party telemetry.
+- Treat connector services as separate external processors. A connector may receive message-derived search terms or context only after its own retention, logging, residency, classification, and enterprise approval satisfy D-06.
+
+The service shall run a startup and preflight policy check for the configured provider profile. Missing or unverifiable ZDR entitlement, use of a prohibited endpoint/tool, or a request option that enables storage shall block the request and produce a local diagnostic without message content.
+
+OpenAI documents limited safety or legal-retention exceptions even for approved data controls. The Cisco data-governance owner must confirm that the applicable contract and deployment configuration satisfy the user's “not stored outside the device” requirement. If that absolute requirement cannot tolerate the provider's disclosed exceptions or associated service metadata, a cloud model is not eligible and a separately specified on-device model is required.
 
 ## 14. Analysis quality contract
 
@@ -682,9 +712,13 @@ Native section discovery may be reconsidered only if Webex later exposes a suppo
 
 **Mandatory release test:** Validate the generated link with a non-sensitive test space and message against the user's then-current Webex desktop version. Test group and direct spaces, root and thread messages, and signed-out/deleted/no-access states. A failure disables only exact navigation, produces a clear warning, and leaves the source reference and space fallback available.
 
+**Fallback decision:** **Closed — approved by the user on 12 September 2026.** Keep the documented space-link fallback with timestamp, author, snippet, copyable source reference, and a compatibility warning.
+
 ### P0-03 — Enterprise approval and data path
 
-Confirm that the chosen Webex integration, model provider, local storage design, and each connector are permitted for Cisco message data and the classifications present in selected spaces.
+**Status:** **Partially resolved; enterprise verification remains required.**
+
+The user approved transient off-device processing with no external persistence on 12 September 2026. The technical profile in §13.4 requires an approved zero-retention deployment and fails closed otherwise. Confirm that the chosen Webex integration, OpenAI organization/project and ZDR entitlement, local storage design, and each connector are permitted for Cisco message data and the classifications present in selected spaces. D-05 remains open until the user accepts the `gpt-5.6-sol` recommendation and the enterprise owner approves its data path.
 
 ### P0-04 — Credential design
 
@@ -777,17 +811,18 @@ Suggested approval record:
 | 0.3-draft | Repository decision recorded | User | 12 September 2026 | Canonical repository approved as `saransuresh1705/Action-Insights`; specification moved to `docs/technical-specification.md`. Overall spec remains unapproved. |
 | 0.4-draft | Credential decision recorded | User | 12 September 2026 | P0-04 and D-14 approved: OS credential store with non-secret config references; plaintext credential files excluded. Overall spec remains unapproved. |
 | 0.5-draft | Section-mirroring decision recorded | User | 12 September 2026 | P0-01 and D-01 approved: app-local Watched Collections shall mirror Webex sections. Overall spec remains unapproved. |
+| 0.6-draft | Navigation, summary, and data-path decisions recorded | User | 12 September 2026 | D-02, D-03, and D-06 approved. D-05 recommendation is `gpt-5.6-sol`, pending user and enterprise approval. Overall spec remains unapproved. |
 
 ## 19. Open decisions for the next review
 
 | ID | Decision | Recommended starting point |
 |---|---|---|
 | D-01 | Are app-local Watched Collections acceptable if Webex sections are not exposed? | **Approved by the user on 12 September 2026:** use app-local Watched Collections with easy bulk selection and collection mirroring. |
-| D-02 | What is the accepted behavior if the desktop exact-message compatibility link stops working in a future Webex release? | Keep the documented space-link fallback with timestamp, author, snippet, and copyable source reference; show a compatibility warning. |
-| D-03 | Does “summary in a specific section” mean summaries displayed in this app for spaces in that section, or summaries posted into Webex? | Display in this app. Posting would violate the release-1 no-write posture. |
+| D-02 | What is the accepted behavior if the desktop exact-message compatibility link stops working in a future Webex release? | **Approved by the user on 12 September 2026:** keep the documented space-link fallback with timestamp, author, snippet, copyable source reference, and a compatibility warning. |
+| D-03 | Does “summary in a specific section” mean summaries displayed in this app for spaces in that section, or summaries posted into Webex? | **Approved by the user on 12 September 2026:** display summaries in this app; do not post them into Webex. |
 | D-04 | Approve TypeScript/Node.js for the local service and browser code? | **Approved by the user on 12 September 2026.** |
-| D-05 | Which model endpoint is approved for Cisco message content? | Decide with Cisco data-governance/security stakeholders before Phase 2. |
-| D-06 | May any message content leave the device, and under what classification rules? | Default deny until approved. |
+| D-05 | Which model endpoint is approved for Cisco message content? | **Recommendation pending user and enterprise approval:** OpenAI `gpt-5.6-sol` through the Responses API with the §13.4 zero-retention profile. |
+| D-06 | May any message content leave the device, and under what classification rules? | **Approved by the user on 12 September 2026:** transient off-device processing is permitted, but message content shall not be stored outside the device; enforce §13.4 and fail closed. |
 | D-07 | Is macOS-only release 1 acceptable? | Yes for a personal local deployment. |
 | D-08 | Default initial backfill and retention? | 30-day backfill; 30-day raw, 90-day derived retention. |
 | D-09 | Include direct messages by default? | No; explicit opt-in because they may be more sensitive. |
@@ -807,7 +842,7 @@ Suggested approval record:
 | False action detection | Noise or incorrect sense of obligation. | Evidence, confidence threshold, Needs review, feedback, eval corpus. |
 | Missed actions | User overlooks work. | Conservative candidate recall, periodic reconciliation, measurable evaluation, no claim of completeness. |
 | Prompt injection in messages or connected content | Data leakage or unsafe tool use. | Untrusted-content boundaries, allow-listed read tools, policy broker, schema validation, tests. |
-| Sensitive data sent to model | Privacy/compliance issue. | Provider approval, data minimization, classification rules, local redaction, default deny. |
+| Sensitive data sent to model | Privacy/compliance issue. | Approved ZDR project, `store: false`, stateless foreground requests, caching disabled, data minimization, local redaction, prohibited persistent endpoints, and fail-closed preflight. |
 | Credential theft | Unauthorized access. | OS credential store, loopback-only service, no browser exposure, redaction, rotation/revocation. |
 | Cross-space leakage in summaries | Confidentiality breach. | Per-space partitions, evidence validation, isolation tests. |
 | Recommendations mistaken for completed work | Miscommunication. | Explicit labels, no completion claims, no automatic resolve, no send/write capability. |
@@ -825,6 +860,9 @@ These links support the feasibility assumptions in this draft; platform behavior
 - The exact-message form with an additional `message` UUID is corroborated by a public interoperability report but is not part of Cisco's public protocol contract; it is therefore treated as a compatibility feature: [Atlassian community report showing a Webex-generated message URI](https://community.atlassian.com/forums/Jira-questions/JIRA-Confluence-refuse-webexteams-urls/qaq-p/2885694).
 - The official Webex Messaging MCP server exposes read and write tools and requires administrator enablement; release 1 would allow-list read tools only: [Webex Messaging MCP Server](https://developer.webex.com/mcp/docs/messaging-mcp-server).
 - MCP guidance recommends PKCE and secure local token storage for local clients: [Model Context Protocol authorization](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization).
+- OpenAI describes `gpt-5.6-sol` as its flagship GPT-5.6 model for complex professional work and documents its structured-output and function-calling support: [GPT-5.6 Sol model](https://developers.openai.com/api/docs/models/gpt-5.6-sol).
+- OpenAI documents default abuse-monitoring retention, Zero Data Retention eligibility and limitations, endpoint persistence behavior, and data-sharing controls: [OpenAI API data controls](https://developers.openai.com/api/docs/guides/your-data).
+- The Responses API reference documents `store`, foreground/background operation, and GPT-5.6 prompt-cache options: [Create a model response](https://developers.openai.com/api/reference/cli/resources/responses/methods/create).
 
 ## 22. Definition of spec-ready
 
