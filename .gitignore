@@ -10,8 +10,8 @@ coverage/
 .env
 .env.*
 !.env.example
-secrets.*
-credentials.*
+/secrets.*
+/credentials.*
 config.local.*
 config/*.local.json
 *.pem
