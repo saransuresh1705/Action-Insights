@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 0.7-draft |
+| Document version | 0.8-draft |
 | Status | **Draft — not approved for implementation** |
 | Date | 12 September 2026 |
 | Intended deployment | Single-user, local-first application |
@@ -480,7 +480,7 @@ webex:
   credential_ref: os-keychain://webex-action-insights/webex-oauth
 model:
   provider: openai
-  model: gpt-5.6-sol # recommendation; pending user and enterprise approval
+  model: gpt-5.6-sol # user-approved; enterprise/ZDR verification required
   reasoning_effort: medium
   store: false
   credential_ref: os-keychain://webex-action-insights/model
@@ -624,11 +624,11 @@ Connector output shall include source system, stable item ID, title, URL, retrie
 
 ### 13.3 Model provider
 
-**D-05 recommendation, pending approval:** use OpenAI `gpt-5.6-sol` through the Responses API. Within the GPT-5.6 family, this is the recommended quality-first choice for the core summarization, classification, drafting, and bounded tool-planning workload. Use structured outputs and function calling through the provider adapter. Use `medium` reasoning for routine scans and allow a policy-controlled escalation to `high` for ambiguous or high-consequence analysis; the model still cannot execute an action.
+**D-05 approved by the user on 12 September 2026:** use OpenAI `gpt-5.6-sol` through the Responses API with the zero-retention profile in §13.4. Within the GPT-5.6 family, this is the approved quality-first choice for the core summarization, classification, drafting, and bounded tool-planning workload. Use structured outputs and function calling through the provider adapter. Use `medium` reasoning for routine scans and allow a policy-controlled escalation to `high` for ambiguous or high-consequence analysis; the model still cannot execute an action.
 
 `gpt-5.6-terra` is a future cost/latency optimization candidate and `gpt-5.6-luna` is a future high-volume, cost-sensitive candidate. Neither should replace the quality baseline until evaluation against the approved corpus shows that it meets the same safety and accuracy thresholds.
 
-Before implementation, the user and relevant Cisco data-governance owner must approve:
+The user has approved the provider, model, and required zero-retention profile. Before model-enabled implementation or testing with Cisco message content, the relevant Cisco data-governance owner must verify and approve:
 
 - Provider and model.
 - Hosting/region and enterprise agreement.
@@ -724,7 +724,7 @@ Native section discovery may be reconsidered only if Webex later exposes a suppo
 
 **Status:** **Partially resolved; enterprise verification remains required.**
 
-The user approved transient off-device processing with no external persistence on 12 September 2026. The technical profile in §13.4 requires an approved zero-retention deployment and fails closed otherwise. Confirm that the chosen Webex integration, OpenAI organization/project and ZDR entitlement, local storage design, and each connector are permitted for Cisco message data and the classifications present in selected spaces. D-05 remains open until the user accepts the `gpt-5.6-sol` recommendation and the enterprise owner approves its data path.
+The user approved transient off-device processing with no external persistence and approved OpenAI `gpt-5.6-sol` with the §13.4 zero-retention profile on 12 September 2026. The profile requires an approved zero-retention deployment and fails closed otherwise. Confirm that the chosen Webex integration, OpenAI organization/project and ZDR entitlement, local storage design, and each connector are permitted for Cisco message data and the classifications present in selected spaces. User decisions D-05 and D-06 are closed; enterprise verification of the data path remains open.
 
 ### P0-04 — Credential design
 
@@ -820,8 +820,9 @@ Suggested approval record:
 | 0.5-draft | Section-mirroring decision recorded | User | 12 September 2026 | P0-01 and D-01 approved: app-local Watched Collections shall mirror Webex sections. Overall spec remains unapproved. |
 | 0.6-draft | Navigation, summary, and data-path decisions recorded | User | 12 September 2026 | D-02, D-03, and D-06 approved. D-05 recommendation is `gpt-5.6-sol`, pending user and enterprise approval. Overall spec remains unapproved. |
 | 0.7-draft | Deployment, retention, message scope, scheduling, connector order, and attachment decisions recorded | User | 12 September 2026 | D-07 through D-12 approved. Direct messages are included with strict content-free logging. Overall spec remains unapproved. |
+| 0.8-draft | Model selection approved | User | 12 September 2026 | D-05 approved: OpenAI `gpt-5.6-sol` with the §13.4 zero-retention profile. Enterprise/ZDR verification and final specification approval remain outstanding. |
 
-## 19. Open decisions for the next review
+## 19. Decision register
 
 | ID | Decision | Recommended starting point |
 |---|---|---|
@@ -829,7 +830,7 @@ Suggested approval record:
 | D-02 | What is the accepted behavior if the desktop exact-message compatibility link stops working in a future Webex release? | **Approved by the user on 12 September 2026:** keep the documented space-link fallback with timestamp, author, snippet, copyable source reference, and a compatibility warning. |
 | D-03 | Does “summary in a specific section” mean summaries displayed in this app for spaces in that section, or summaries posted into Webex? | **Approved by the user on 12 September 2026:** display summaries in this app; do not post them into Webex. |
 | D-04 | Approve TypeScript/Node.js for the local service and browser code? | **Approved by the user on 12 September 2026.** |
-| D-05 | Which model endpoint is approved for Cisco message content? | **Recommendation pending user and enterprise approval:** OpenAI `gpt-5.6-sol` through the Responses API with the §13.4 zero-retention profile. |
+| D-05 | Which model endpoint is approved for Cisco message content? | **Approved by the user on 12 September 2026:** OpenAI `gpt-5.6-sol` through the Responses API with the §13.4 zero-retention profile. Enterprise/ZDR verification remains required before processing Cisco message content. |
 | D-06 | May any message content leave the device, and under what classification rules? | **Approved by the user on 12 September 2026:** transient off-device processing is permitted, but message content shall not be stored outside the device; enforce §13.4 and fail closed. |
 | D-07 | Is macOS-only release 1 acceptable? | **Approved by the user on 12 September 2026:** yes, for a personal local deployment. |
 | D-08 | Default initial backfill and retention? | **Approved by the user on 12 September 2026:** 30-day backfill, 30-day raw-message retention, and 90-day derived-insight retention. |
