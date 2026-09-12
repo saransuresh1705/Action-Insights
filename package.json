@@ -1,0 +1,23 @@
+{
+  "name": "webex-action-insights",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "description": "Local-first, read-only Webex conversation insights application.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.build.json && node scripts/copy-static.mjs",
+    "dev": "pnpm build && node --watch dist/server/main.js",
+    "start": "node dist/server/main.js",
+    "test": "tsc -p tsconfig.test.build.json && node --test build-test/test/*.test.js",
+    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "verify": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

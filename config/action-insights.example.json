@@ -1,0 +1,28 @@
+{
+  "app": {
+    "bindHost": "127.0.0.1",
+    "port": 4318,
+    "timezone": "Asia/Kolkata"
+  },
+  "scan": {
+    "intervalMinutes": 60,
+    "initialBackfillDays": 30,
+    "overlapMinutes": 10
+  },
+  "retention": {
+    "rawMessageDays": 30,
+    "derivedInsightDays": 90,
+    "auditMetadataDays": 180
+  },
+  "webex": {
+    "oauthClientId": "replace-with-non-secret-client-id",
+    "credentialRef": "os-keychain://webex-action-insights/webex-oauth"
+  },
+  "model": {
+    "provider": "openai",
+    "name": "gpt-5.6-sol",
+    "reasoningEffort": "medium",
+    "store": false,
+    "credentialRef": "os-keychain://webex-action-insights/openai"
+  }
+}

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Webex Action Insights</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/client/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Local workspace</p>
+        <h1>Webex Action Insights</h1>
+      </div>
+      <output id="service-status" class="status-pill" aria-live="polite">Connecting…</output>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <p class="eyebrow">Release 1 foundation</p>
+          <h2 id="hero-title">Turn conversations into a reviewable action inbox.</h2>
+          <p>
+            This local application will summarize selected spaces, surface evidence-linked actions, and prepare drafts
+            without sending or changing anything on your behalf.
+          </p>
+        </div>
+        <button type="button" disabled aria-describedby="scan-help">Scan now</button>
+        <p id="scan-help" class="muted">Webex connection is part of the next implementation slice.</p>
+      </section>
+
+      <section aria-labelledby="overview-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Configuration preview</p>
+            <h2 id="overview-title">Local safeguards are active</h2>
+          </div>
+        </div>
+
+        <div class="card-grid">
+          <article class="card">
+            <h3>Model</h3>
+            <p id="model-status">Loading…</p>
+            <span>Responses use minimized-storage settings.</span>
+          </article>
+          <article class="card">
+            <h3>Schedule</h3>
+            <p id="schedule-status">Loading…</p>
+            <span>Closing the app pauses monitoring.</span>
+          </article>
+          <article class="card">
+            <h3>Retention</h3>
+            <p id="retention-status">Loading…</p>
+            <span>Message data remains in the encrypted local store.</span>
+          </article>
+          <article class="card card-safe">
+            <h3>Guardrail</h3>
+            <p id="guardrail-status">Loading…</p>
+            <span>No send, update, merge, delete, or execution capability.</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="two-column" aria-label="Initial dashboard panels">
+        <article class="panel">
+          <p class="eyebrow">Action inbox</p>
+          <h2>No actions yet</h2>
+          <p>Connect Webex and choose Watched Collections to begin.</p>
+        </article>
+        <article class="panel">
+          <p class="eyebrow">Scope</p>
+          <h2>Direct messages</h2>
+          <p id="direct-message-status">Loading…</p>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <p>Read-only decision support · specification 1.0</p>
+    </footer>
+  </body>
+</html>

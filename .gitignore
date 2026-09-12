@@ -2,6 +2,7 @@
 node_modules/
 dist/
 build/
+build-test/
 coverage/
 *.tsbuildinfo
 
@@ -12,6 +13,7 @@ coverage/
 secrets.*
 credentials.*
 config.local.*
+config/*.local.json
 *.pem
 *.key
 *.p12
@@ -34,4 +36,3 @@ cache/
 *.log
 *.tmp
 *.swp
-
