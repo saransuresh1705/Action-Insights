@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 0.3-draft |
+| Document version | 0.4-draft |
 | Status | **Draft — not approved for implementation** |
 | Date | 12 September 2026 |
 | Intended deployment | Single-user, local-first application |
@@ -53,7 +53,7 @@ The application is an analysis and decision-support tool. Release 1 does **not**
 | UR-08 | Agentic backend orchestrates recommendation and execution layers. | Supported as a bounded orchestration layer plus a policy-controlled tool broker. The execution interface exists architecturally but all side-effecting operations are disabled in release 1. |
 | UR-09 | UI for configuration, summaries, actionables, drafts, and recommendations. | Supported as a local HTML application. |
 | UR-10 | Guardrails against serious consequences. | Supported; see §11. |
-| UR-11 | No credentials in code; use local configuration. | Supported using non-secret local configuration plus credential references to secure local storage; see §10. |
+| UR-11 | No credentials in code; use local configuration. | Supported using non-secret local configuration plus credential references to secure local storage; see §10. The OS credential-store design was approved by the user on 12 September 2026. |
 | UR-12 | HTML UI; get approval before using another language. | HTML/CSS is retained for presentation. **TypeScript on Node.js is approved** for the local service and browser code as of 12 September 2026. |
 | UR-13 | Detailed specification before development; future changes go through spec review and approval. | This document establishes that governance; see §18. The specification and application code shall be versioned together in the canonical GitHub repository. |
 
@@ -486,6 +486,8 @@ The checked-in repository may contain a `.example` file with placeholders only.
 
 ### 10.2 Secrets
 
+**Approved 12 September 2026:** The operating-system credential-store design described in this section is the required release-1 approach.
+
 The phrase “credentials are not stored in code” is compatible with unattended operation only if tokens are stored somewhere securely. The required design is:
 
 - Configuration stores credential **references**, not secret values.
@@ -686,7 +688,9 @@ Confirm that the chosen Webex integration, model provider, local storage design,
 
 ### P0-04 — Credential design
 
-Confirm that OS credential storage with references in the local config file satisfies the user's credential requirement. Plaintext local credential files are not in the baseline.
+**Status:** **Closed — approved by the user on 12 September 2026.**
+
+OS credential storage with non-secret references in the local configuration file satisfies the credential requirement. Plaintext local credential files are excluded from the release-1 baseline. Any later introduction of plaintext credential storage requires a specification change and explicit user approval.
 
 ## 16. Testing and acceptance
 
@@ -771,6 +775,7 @@ Suggested approval record:
 | 0.1-draft | Pending | — | — | Initial draft |
 | 0.2-draft | Partial decision recorded | User | 12 September 2026 | D-04 approved: TypeScript on Node.js for service and browser code. UR-03 feasibility research incorporated; overall spec remains unapproved. |
 | 0.3-draft | Repository decision recorded | User | 12 September 2026 | Canonical repository approved as `saransuresh1705/Action-Insights`; specification moved to `docs/technical-specification.md`. Overall spec remains unapproved. |
+| 0.4-draft | Credential decision recorded | User | 12 September 2026 | P0-04 and D-14 approved: OS credential store with non-secret config references; plaintext credential files excluded. Overall spec remains unapproved. |
 
 ## 19. Open decisions for the next review
 
@@ -789,6 +794,7 @@ Suggested approval record:
 | D-11 | Which connector should be implemented first? | Jira read-only, then GitHub and Confluence; SharePoint after enterprise auth feasibility. |
 | D-12 | Should file attachments ever be analyzed? | No in release 1. |
 | D-13 | Which repository is canonical for specification and application code? | **Approved by the user on 12 September 2026:** `https://github.com/saransuresh1705/Action-Insights`. |
+| D-14 | How shall OAuth tokens, client secrets, API keys, and connector secrets be stored? | **Approved by the user on 12 September 2026:** OS credential store; local configuration contains references only. Plaintext secret files are excluded. |
 
 ## 20. Risks and mitigations
 
