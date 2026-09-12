@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 0.4-draft |
+| Document version | 0.5-draft |
 | Status | **Draft — not approved for implementation** |
 | Date | 12 September 2026 |
 | Intended deployment | Single-user, local-first application |
@@ -44,7 +44,7 @@ The application is an analysis and decision-support tool. Release 1 does **not**
 | ID | Source requirement | Release 1 disposition |
 |---|---|---|
 | UR-01 | Read messages across all Webex spaces at configurable intervals. | Supported for explicitly selected spaces. “All joined spaces” may be enabled, but new spaces require a visible opt-in policy. Incremental reads and configurable backfill are required. |
-| UR-02 | Summarize each space in configurable Webex sections. | Supported through app-managed **Watched Collections** that mirror Webex sections. Automatic discovery of native Webex sections is a feasibility item because no public section API has been identified. |
+| UR-02 | Summarize each space in configurable Webex sections. | Supported through app-managed **Watched Collections** that mirror Webex sections. This release-1 approach was approved by the user on 12 September 2026 because no public native-section API has been identified. |
 | UR-03 | Highlight action messages and space; link to the specific message. | Feasible for the macOS Webex desktop client through a `webexteams:` exact-message URI. The message parameter is not publicly documented by Cisco, so implementation must use the validated compatibility adapter and tests in §6.10 and §15. A space-level fallback shall remain available. |
 | UR-04 | Identify action type and suggest categories. | Supported through the taxonomy in §6.7. |
 | UR-05 | Generate response drafts with copy option. | Supported. Copy only; no Send button in release 1. |
@@ -659,13 +659,13 @@ These gates must be resolved before implementation scope is approved.
 
 ### P0-01 — Native Webex section discovery
 
-**Current finding:** Webex documents end-user space sections, but the reviewed public Rooms and Messages API references do not expose a section resource or section membership field.
+**Status:** **Closed — app-local section mirroring approved by the user on 12 September 2026.**
 
-**Spike:** Confirm with Webex Developer Support or an organization-approved API whether native section names and membership are accessible to an OAuth integration.
+**Finding:** Webex documents end-user space sections, but the reviewed public Rooms and Messages API references do not expose a section resource or section membership field.
 
-**Baseline if unavailable:** User creates Watched Collections and selects spaces from the API-provided space catalog. Provide quick bulk selection and optional paste/import of Webex space links. Do not scrape Webex UI files or automate the desktop client.
+**Approved release-1 design:** The user creates Watched Collections and selects spaces from the API-provided space catalog. The UI shall provide quick bulk selection and optional paste/import of Webex space links. It shall not scrape Webex UI files or automate the desktop client.
 
-**Acceptance decision required:** Is app-local section mirroring acceptable?
+Native section discovery may be reconsidered only if Webex later exposes a supported API. Adding synchronization would require a specification revision and user approval.
 
 ### P0-02 — Exact-message deep-link compatibility
 
@@ -776,12 +776,13 @@ Suggested approval record:
 | 0.2-draft | Partial decision recorded | User | 12 September 2026 | D-04 approved: TypeScript on Node.js for service and browser code. UR-03 feasibility research incorporated; overall spec remains unapproved. |
 | 0.3-draft | Repository decision recorded | User | 12 September 2026 | Canonical repository approved as `saransuresh1705/Action-Insights`; specification moved to `docs/technical-specification.md`. Overall spec remains unapproved. |
 | 0.4-draft | Credential decision recorded | User | 12 September 2026 | P0-04 and D-14 approved: OS credential store with non-secret config references; plaintext credential files excluded. Overall spec remains unapproved. |
+| 0.5-draft | Section-mirroring decision recorded | User | 12 September 2026 | P0-01 and D-01 approved: app-local Watched Collections shall mirror Webex sections. Overall spec remains unapproved. |
 
 ## 19. Open decisions for the next review
 
 | ID | Decision | Recommended starting point |
 |---|---|---|
-| D-01 | Are app-local Watched Collections acceptable if Webex sections are not exposed? | Yes; require easy bulk selection and collection mirroring. |
+| D-01 | Are app-local Watched Collections acceptable if Webex sections are not exposed? | **Approved by the user on 12 September 2026:** use app-local Watched Collections with easy bulk selection and collection mirroring. |
 | D-02 | What is the accepted behavior if the desktop exact-message compatibility link stops working in a future Webex release? | Keep the documented space-link fallback with timestamp, author, snippet, and copyable source reference; show a compatibility warning. |
 | D-03 | Does “summary in a specific section” mean summaries displayed in this app for spaces in that section, or summaries posted into Webex? | Display in this app. Posting would violate the release-1 no-write posture. |
 | D-04 | Approve TypeScript/Node.js for the local service and browser code? | **Approved by the user on 12 September 2026.** |
@@ -800,7 +801,7 @@ Suggested approval record:
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Native Webex sections unavailable via API | Cannot directly mirror user-created sections. | Watched Collections; P0 support inquiry; no UI scraping. |
+| Native Webex sections unavailable via API | Cannot automatically synchronize user-created Webex sections. | Approved app-local Watched Collections with bulk selection and optional link import; no UI scraping. |
 | Exact-message desktop URI is undocumented and changes | Exact navigation may stop working after a Webex update. | Isolated validated adapter, mandatory release test, telemetry-free health warning, documented space-link fallback, no fabricated HTTPS link. |
 | Large initial history and API throttling | Slow/incomplete backfill. | Bounded default backfill, pagination, resumable cursors, `Retry-After`, transparent progress. |
 | False action detection | Noise or incorrect sense of obligation. | Evidence, confidence threshold, Needs review, feedback, eval corpus. |
