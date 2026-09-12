@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 0.8-draft |
+| Document version | 0.9-draft |
 | Status | **Draft — not approved for implementation** |
 | Date | 12 September 2026 |
 | Intended deployment | Single-user, local-first application |
@@ -480,9 +480,10 @@ webex:
   credential_ref: os-keychain://webex-action-insights/webex-oauth
 model:
   provider: openai
-  model: gpt-5.6-sol # user-approved; enterprise/ZDR verification required
+  model: gpt-5.6-sol # user-approved with OpenAI default retention
   reasoning_effort: medium
   store: false
+  data_retention_profile: openai-default
   credential_ref: os-keychain://webex-action-insights/model
 connectors:
   jira:
@@ -557,10 +558,11 @@ Such items shall receive a “High-consequence — human review required” bann
 - Encrypted retained message content and local backups only when explicitly configured.
 - No telemetry containing message text, names, space titles, URLs, or connector payloads.
 - Crash reports are opt-in and scrubbed.
-- Message content may leave the device only for transient processing by an approved model endpoint or approved read-only connector. It shall not be persistently stored outside the device.
-- Model-provider data handling, retention, region, safety-retention exceptions, and enterprise approval must be verified before model access is enabled.
-- If the required zero-retention controls cannot be verified at runtime or deployment approval time, external model calls shall fail closed and local ingestion/review shall remain available without AI analysis.
-- No prompt, response, model cache, trace, or raw connector payload containing message content may be written to external logs, observability systems, evaluation stores, or backups.
+- Message content may leave the device for processing by the user-approved OpenAI model endpoint and individually enabled read-only connectors.
+- The user accepts OpenAI's standard API data controls, including abuse-monitoring logs that may contain prompts and responses and may be retained for up to 30 days by default, or longer when legally required or reasonably necessary to protect OpenAI's services or third parties from harm.
+- The application shall display this off-device processing and retention disclosure before the first model-enabled scan and record the user's acknowledgement locally. No recurring Cisco enterprise-approval or ZDR-verification gate is required for this personal deployment.
+- API data sharing for model training, feedback, or evaluation shall remain disabled. OpenAI states that API data is not used to train models unless the customer explicitly opts in.
+- No prompt, response, model cache, trace, or raw connector payload containing message content may be written by the application to any additional external logging, observability, evaluation, telemetry, or backup service. This prohibition does not describe OpenAI's disclosed service-side abuse-monitoring retention accepted under D-06.
 
 ## 12. Non-functional requirements
 
@@ -624,39 +626,30 @@ Connector output shall include source system, stable item ID, title, URL, retrie
 
 ### 13.3 Model provider
 
-**D-05 approved by the user on 12 September 2026:** use OpenAI `gpt-5.6-sol` through the Responses API with the zero-retention profile in §13.4. Within the GPT-5.6 family, this is the approved quality-first choice for the core summarization, classification, drafting, and bounded tool-planning workload. Use structured outputs and function calling through the provider adapter. Use `medium` reasoning for routine scans and allow a policy-controlled escalation to `high` for ambiguous or high-consequence analysis; the model still cannot execute an action.
+**D-05 approved by the user on 12 September 2026:** use OpenAI `gpt-5.6-sol` through the Responses API with the minimized-storage, standard-retention profile in §13.4. Within the GPT-5.6 family, this is the approved quality-first choice for the core summarization, classification, drafting, and bounded tool-planning workload. Use structured outputs and function calling through the provider adapter. Use `medium` reasoning for routine scans and allow a policy-controlled escalation to `high` for ambiguous or high-consequence analysis; the model still cannot execute an action.
 
 `gpt-5.6-terra` is a future cost/latency optimization candidate and `gpt-5.6-luna` is a future high-volume, cost-sensitive candidate. Neither should replace the quality baseline until evaluation against the approved corpus shows that it meets the same safety and accuracy thresholds.
 
-The user has approved the provider, model, and required zero-retention profile. Before model-enabled implementation or testing with Cisco message content, the relevant Cisco data-governance owner must verify and approve:
-
-- Provider and model.
-- Hosting/region and enterprise agreement.
-- Data retention and training policy.
-- Maximum context and usage budget.
-- The zero-retention data path specified in §13.4.
-- Structured-output and tool-use capabilities.
-- Redaction requirements.
+The user has approved the provider, model, OpenAI's default API retention, and the minimized-storage controls in §13.4 for this personal local deployment. Formal Cisco data-governance authorization and OpenAI ZDR evidence are not application prerequisites. The user remains responsible for complying with any organizational policy that independently applies to the selected Webex content or connected systems.
 
 The application shall use a provider adapter so the orchestration and policy layer does not depend on one model vendor.
 
-### 13.4 External processing and zero-retention profile
+### 13.4 External processing and minimized-storage profile
 
-**D-06 approved by the user on 12 September 2026:** message content may leave the device for transient processing, but it shall not be stored anywhere outside the device.
+**D-06 revised and approved by the user on 12 September 2026:** message content may leave the device for processing by OpenAI `gpt-5.6-sol`. The user accepts OpenAI's default API retention, including abuse-monitoring logs that may contain customer content and are retained for up to 30 days by default, subject to OpenAI's documented legal and safety exceptions.
 
-The OpenAI deployment profile shall therefore meet all of the following requirements before model calls are enabled:
+The application shall still minimize avoidable provider-side persistence:
 
-- Use a Cisco-approved OpenAI API organization/project for which **Zero Data Retention (ZDR)** has been enabled and verified. Standard API abuse-monitoring retention, which may retain customer content for up to 30 days, does not satisfy D-06.
-- Use foreground, stateless `POST /v1/responses` requests with `store: false`. Do not use `previous_response_id` or any server-side conversation state.
-- Do not use Conversations, Assistants/Threads, Files, Vector Stores, Batch, background mode, hosted Code Interpreter, or another feature that persists application state or is not eligible for ZDR.
+- Use foreground, stateless `POST /v1/responses` requests with an explicit `store: false`; omission is prohibited because the Responses API defaults `store` to `true`. Do not use `previous_response_id` or any server-side conversation state.
+- Do not use Conversations, Assistants/Threads, Files, Vector Stores, Batch, background mode, hosted Code Interpreter, or another feature that creates provider-hosted application state.
 - Disable implicit prompt caching for GPT-5.6 by setting `prompt_cache_options.mode` to `explicit` and providing no cache key or cache breakpoints. Prompts and reusable context remain local.
 - Do not configure OpenAI-hosted remote MCP tools. The local policy broker invokes approved read-only connectors, applies minimization/redaction, and supplies only the necessary normalized result to the model request.
 - Do not opt API data into model training or feedback sharing. Do not attach message-bearing payloads to support tickets, eval services, tracing systems, or third-party telemetry.
-- Treat connector services as separate external processors. A connector may receive message-derived search terms or context only after its own retention, logging, residency, classification, and enterprise approval satisfy D-06.
+- Treat connector services as separate external processors. Before enabling one, the UI shall disclose what message-derived data it receives and link to or summarize its retention policy.
 
-The service shall run a startup and preflight policy check for the configured provider profile. Missing or unverifiable ZDR entitlement, use of a prohibited endpoint/tool, or a request option that enables storage shall block the request and produce a local diagnostic without message content.
+The service shall validate each outbound model request against this profile. Use of a prohibited endpoint/tool, omission of `store: false`, any prompt-cache breakpoint/key, or a request option that enables application-state storage shall block the request and produce a local diagnostic without message content.
 
-OpenAI documents limited safety or legal-retention exceptions even for approved data controls. The Cisco data-governance owner must confirm that the applicable contract and deployment configuration satisfy the user's “not stored outside the device” requirement. If that absolute requirement cannot tolerate the provider's disclosed exceptions or associated service metadata, a cloud model is not eligible and a separately specified on-device model is required.
+The first-use disclosure shall distinguish local application storage from OpenAI service-side retention. It shall state that `store: false` does not disable OpenAI's accepted abuse-monitoring logs and shall provide a link to the current OpenAI data-controls documentation.
 
 ## 14. Analysis quality contract
 
@@ -720,11 +713,11 @@ Native section discovery may be reconsidered only if Webex later exposes a suppo
 
 **Fallback decision:** **Closed — approved by the user on 12 September 2026.** Keep the documented space-link fallback with timestamp, author, snippet, copyable source reference, and a compatibility warning.
 
-### P0-03 — Enterprise approval and data path
+### P0-03 — External model data path
 
-**Status:** **Partially resolved; enterprise verification remains required.**
+**Status:** **Closed — personal-deployment retention posture approved by the user on 12 September 2026.**
 
-The user approved transient off-device processing with no external persistence and approved OpenAI `gpt-5.6-sol` with the §13.4 zero-retention profile on 12 September 2026. The profile requires an approved zero-retention deployment and fails closed otherwise. Confirm that the chosen Webex integration, OpenAI organization/project and ZDR entitlement, local storage design, and each connector are permitted for Cisco message data and the classifications present in selected spaces. User decisions D-05 and D-06 are closed; enterprise verification of the data path remains open.
+The user approved sending selected Webex message content from the local desktop application to OpenAI `gpt-5.6-sol` and accepted OpenAI's default API retention. Formal Cisco authorization and ZDR verification are not application gates for this personal deployment. The minimized-storage controls in §13.4 remain mandatory, and the UI must obtain a local first-use acknowledgement before the first model-enabled scan. Connector disclosures and enablement are handled separately.
 
 ### P0-04 — Credential design
 
@@ -748,6 +741,7 @@ OS credential storage with non-secret references in the local configuration file
 10. User can correct, snooze, resolve, dismiss, and delete derived items.
 11. User can purge all local data and disconnect credentials.
 12. Partial scans and stale insights are unmistakably labelled.
+13. Before the first model-enabled scan, the UI discloses that selected message content is sent to OpenAI and may be retained in OpenAI abuse-monitoring logs under its default API data controls; the scan cannot proceed until the user acknowledges this locally.
 
 ### 16.2 Security acceptance
 
@@ -818,9 +812,10 @@ Suggested approval record:
 | 0.3-draft | Repository decision recorded | User | 12 September 2026 | Canonical repository approved as `saransuresh1705/Action-Insights`; specification moved to `docs/technical-specification.md`. Overall spec remains unapproved. |
 | 0.4-draft | Credential decision recorded | User | 12 September 2026 | P0-04 and D-14 approved: OS credential store with non-secret config references; plaintext credential files excluded. Overall spec remains unapproved. |
 | 0.5-draft | Section-mirroring decision recorded | User | 12 September 2026 | P0-01 and D-01 approved: app-local Watched Collections shall mirror Webex sections. Overall spec remains unapproved. |
-| 0.6-draft | Navigation, summary, and data-path decisions recorded | User | 12 September 2026 | D-02, D-03, and D-06 approved. D-05 recommendation is `gpt-5.6-sol`, pending user and enterprise approval. Overall spec remains unapproved. |
+| 0.6-draft | Navigation, summary, and data-path decisions recorded | User | 12 September 2026 | D-02, D-03, and the original D-06 zero-retention position recorded; the D-06 position is superseded by version 0.9-draft. D-05 remained pending. |
 | 0.7-draft | Deployment, retention, message scope, scheduling, connector order, and attachment decisions recorded | User | 12 September 2026 | D-07 through D-12 approved. Direct messages are included with strict content-free logging. Overall spec remains unapproved. |
-| 0.8-draft | Model selection approved | User | 12 September 2026 | D-05 approved: OpenAI `gpt-5.6-sol` with the §13.4 zero-retention profile. Enterprise/ZDR verification and final specification approval remain outstanding. |
+| 0.8-draft | Model selection approved | User | 12 September 2026 | D-05 approved: OpenAI `gpt-5.6-sol`; its original zero-retention condition is superseded by version 0.9-draft. |
+| 0.9-draft | Default OpenAI retention accepted | User | 12 September 2026 | D-06 revised: OpenAI's default API abuse-monitoring retention is accepted. Formal Cisco authorization and ZDR verification removed as application gates; minimized-storage request controls remain mandatory. Overall spec remains unapproved. |
 
 ## 19. Decision register
 
@@ -830,8 +825,8 @@ Suggested approval record:
 | D-02 | What is the accepted behavior if the desktop exact-message compatibility link stops working in a future Webex release? | **Approved by the user on 12 September 2026:** keep the documented space-link fallback with timestamp, author, snippet, copyable source reference, and a compatibility warning. |
 | D-03 | Does “summary in a specific section” mean summaries displayed in this app for spaces in that section, or summaries posted into Webex? | **Approved by the user on 12 September 2026:** display summaries in this app; do not post them into Webex. |
 | D-04 | Approve TypeScript/Node.js for the local service and browser code? | **Approved by the user on 12 September 2026.** |
-| D-05 | Which model endpoint is approved for Cisco message content? | **Approved by the user on 12 September 2026:** OpenAI `gpt-5.6-sol` through the Responses API with the §13.4 zero-retention profile. Enterprise/ZDR verification remains required before processing Cisco message content. |
-| D-06 | May any message content leave the device, and under what classification rules? | **Approved by the user on 12 September 2026:** transient off-device processing is permitted, but message content shall not be stored outside the device; enforce §13.4 and fail closed. |
+| D-05 | Which model endpoint is approved for Cisco message content? | **Approved by the user on 12 September 2026:** OpenAI `gpt-5.6-sol` through the Responses API with the minimized-storage profile in §13.4. |
+| D-06 | May any message content leave the device, and under what retention rules? | **Revised and approved by the user on 12 September 2026:** message content may be processed by OpenAI, and OpenAI's default API abuse-monitoring retention is accepted. Keep `store: false`, disable prompt caching and server-side conversation state, and disclose the retention boundary before first use. |
 | D-07 | Is macOS-only release 1 acceptable? | **Approved by the user on 12 September 2026:** yes, for a personal local deployment. |
 | D-08 | Default initial backfill and retention? | **Approved by the user on 12 September 2026:** 30-day backfill, 30-day raw-message retention, and 90-day derived-insight retention. |
 | D-09 | Include direct messages by default? | **Approved by the user on 12 September 2026:** include direct messages, while prohibiting sensitive message or identity content from logs, diagnostics, telemetry, and crash reports. |
@@ -851,7 +846,7 @@ Suggested approval record:
 | False action detection | Noise or incorrect sense of obligation. | Evidence, confidence threshold, Needs review, feedback, eval corpus. |
 | Missed actions | User overlooks work. | Conservative candidate recall, periodic reconciliation, measurable evaluation, no claim of completeness. |
 | Prompt injection in messages or connected content | Data leakage or unsafe tool use. | Untrusted-content boundaries, allow-listed read tools, policy broker, schema validation, tests. |
-| Sensitive data sent to model | Privacy/compliance issue. | Approved ZDR project, `store: false`, stateless foreground requests, caching disabled, data minimization, local redaction, prohibited persistent endpoints, and fail-closed preflight. |
+| Sensitive data sent to model | Privacy/compliance issue and provider-side retention. | Explicit first-use disclosure and user acknowledgement, `store: false`, stateless foreground requests, caching disabled, data minimization, local redaction, prohibited persistent endpoints, and no opt-in data sharing. OpenAI's default abuse-monitoring retention is an accepted residual risk. |
 | Credential theft | Unauthorized access. | OS credential store, loopback-only service, no browser exposure, redaction, rotation/revocation. |
 | Cross-space leakage in summaries | Confidentiality breach. | Per-space partitions, evidence validation, isolation tests. |
 | Sensitive direct-message content appears in logs | Confidentiality breach. | Content-free allow-listed structured logging, keyed identifier hashes, automated log-capture tests, and no externally transmitted diagnostics. |
@@ -871,7 +866,7 @@ These links support the feasibility assumptions in this draft; platform behavior
 - The official Webex Messaging MCP server exposes read and write tools and requires administrator enablement; release 1 would allow-list read tools only: [Webex Messaging MCP Server](https://developer.webex.com/mcp/docs/messaging-mcp-server).
 - MCP guidance recommends PKCE and secure local token storage for local clients: [Model Context Protocol authorization](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization).
 - OpenAI describes `gpt-5.6-sol` as its flagship GPT-5.6 model for complex professional work and documents its structured-output and function-calling support: [GPT-5.6 Sol model](https://developers.openai.com/api/docs/models/gpt-5.6-sol).
-- OpenAI documents default abuse-monitoring retention, Zero Data Retention eligibility and limitations, endpoint persistence behavior, and data-sharing controls: [OpenAI API data controls](https://developers.openai.com/api/docs/guides/your-data).
+- OpenAI documents default abuse-monitoring retention, endpoint persistence behavior, retention exceptions, and opt-in data sharing; the user accepts its default API retention for this personal deployment: [OpenAI API data controls](https://developers.openai.com/api/docs/guides/your-data).
 - The Responses API reference documents `store`, foreground/background operation, and GPT-5.6 prompt-cache options: [Create a model response](https://developers.openai.com/api/reference/cli/resources/responses/methods/create).
 
 ## 22. Definition of spec-ready
@@ -880,7 +875,7 @@ The specification is ready for implementation approval only when:
 
 - All P0 feasibility gates have recorded outcomes.
 - D-01 through D-12 are answered.
-- The selected model and data path are enterprise-approved.
+- The selected model, off-device processing, and retention profile are user-approved and reflected in the first-use disclosure.
 - The approved TypeScript/Node.js runtime decision is recorded, and the credential design is approved.
 - The canonical repository contains the specification at `docs/technical-specification.md`.
 - Release-1 acceptance thresholds and a redacted evaluation corpus are agreed.
