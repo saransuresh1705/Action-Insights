@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 1.0-rc1 |
-| Status | **Final approval candidate — not yet approved for implementation** |
+| Document version | 1.0 |
+| Status | **Approved for implementation** |
 | Date | 12 September 2026 |
 | Intended deployment | Single-user, local-first application |
 | Primary user | The authenticated Webex user |
@@ -835,6 +835,7 @@ Suggested approval record:
 | 0.8-draft | Model selection approved | User | 12 September 2026 | D-05 approved: OpenAI `gpt-5.6-sol`; its original zero-retention condition is superseded by version 0.9-draft. |
 | 0.9-draft | Default OpenAI retention accepted | User | 12 September 2026 | D-06 revised: OpenAI's default API abuse-monitoring retention is accepted. Formal Cisco authorization and ZDR verification removed as application gates; minimized-storage request controls remain mandatory. Overall spec remains unapproved. |
 | 1.0-rc1 | Final approval candidate | User | 12 September 2026 | Release thresholds approved. A validated 64-case synthetic corpus was created at `evaluation/corpus.v1.jsonl`. Final specification approval remains pending. |
+| 1.0 | Approved for implementation | User | 12 September 2026 | The user explicitly approved specification 1.0 for implementation and authorized publishing the specification and local commits to the public `saransuresh1705/Action-Insights` repository. |
 
 ## 19. Decision register
 
@@ -900,4 +901,4 @@ The specification is ready for implementation approval only when:
 - Release-1 acceptance thresholds are approved and the synthetic evaluation corpus exists, validates against its documented schema, and contains the required scenario coverage.
 - The approval table identifies a final version and approver.
 
-Until then, this document remains a refinement artifact and no application development is authorized.
+All conditions above are satisfied for specification 1.0. The user approved this version for implementation on 12 September 2026. Development may proceed within this approved scope; later product or behavioral changes remain subject to the specification-first policy in §18.
