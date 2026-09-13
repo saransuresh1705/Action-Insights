@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 1.1 |
-| Status | **Approved for implementation** |
+| Document version | 1.2-draft |
+| Status | **Draft — awaiting user approval** |
 | Date | 13 September 2026 |
 | Intended deployment | Single-user, local-first application |
 | Primary user | The authenticated Webex user |
@@ -313,6 +313,26 @@ The adapter shall derive the UUIDs only from validated Webex API identifiers. Un
 
 **FR-UI-03** Exports shall be manually initiated, previewed, and limited to selected fields. Credentials, hidden prompts, raw connector payloads, and unrelated source messages shall never be exported.
 
+**FR-UI-04** The application shall have two top-level local views: **Insights** and **Settings**. Insights shall be the default view. A persistent, clearly labelled Settings control in the application header shall open Settings without a page reload or loss of current Insights filters.
+
+**FR-UI-05** Configuration controls shall not be displayed in the default Insights view. Webex connection, model/privacy acknowledgement, Watched Collections, space selection, space-catalog activity window, scan schedule, retention, response preferences, connectors, and diagnostics shall be grouped within Settings.
+
+**FR-UI-06** The existing configuration preview shall move to Settings and be renamed **System status and safeguards**. It shall show model readiness, schedule mode, retention, external-write policy, Webex authorization, and connector state. The Insights view may show a compact warning when a condition blocks or degrades a scan, but shall not duplicate configuration forms or the full preview.
+
+**FR-UI-07** Space selection in Settings shall separate **Direct messages** and **Group spaces** using an accessible two-tab control. Each tab shall show its visible-space count and selected-space count. Search, activity-window filtering, bulk selection, and individual selection shall apply predictably within the active tab without clearing selections in the other tab.
+
+**FR-UI-08** Selected direct messages and group spaces that fall outside the activity window shall remain visible in their respective tab with the existing status label. Switching tabs, changing search, or refreshing the catalog shall not silently change selection state.
+
+**FR-UI-09** The Insights view shall keep the **Scan now** control, current scan status/progress, Action inbox, and Space summaries in one workspace. These elements shall not be split across top-level navigation views. On wide screens, actions and summaries may use adjacent or proportioned regions; on narrow screens they shall stack with actions first.
+
+**FR-UI-10** The Insights view shall use progressive disclosure. Action cards initially show the required next step, source space, category, confidence, status, and due date. Source context, rationale, response draft, recommendation details, connector evidence, and correction controls shall be expandable. Summary cards initially show the space, period, coverage, and overview; detailed sections shall be expandable.
+
+**FR-UI-11** A compact Insights filter bar shall provide search plus the most frequently used action filters: collection, space, category, confidence, and status. Less common filters—due date, author, and scan period—shall be available under a **More filters** control. Active filters shall be visible as removable labels, and a single **Clear filters** control shall restore the default view.
+
+**FR-UI-12** The application shall preserve the user's current top-level view, space-type tab, and non-sensitive Insights filters for the current browser session. It shall not encode space names, message text, person names, or other sensitive values in URLs, logs, or browser-persistent storage.
+
+**FR-UI-13** The UI shall provide focused empty, loading, partial, and error states in the region they affect. A catalog failure shall not replace an existing action inbox; a connector failure shall remain attached to its recommendation; and a failed space analysis shall not obscure successful results from other spaces.
+
 ## 7. Primary user experience
 
 ### 7.1 First-run setup
@@ -329,33 +349,40 @@ The adapter shall derive the UUIDs only from validated Webex API identifiers. Un
 
 ### 7.2 Dashboard
 
-The default dashboard shall show:
+The default **Insights** view shall show:
 
-- Last scan result, next scan, and a Scan now control.
-- New and overdue action counts.
-- “Needs review” count.
-- Recent collection and per-space summaries.
-- Connector and authentication warnings.
-- Coverage warnings for partial or rate-limited scans.
+- A compact scan header containing Scan now, current progress or last result, and next scheduled scan.
+- A compact attention strip for new, overdue, and Needs review counts when those counts are non-zero.
+- The filterable Action inbox, followed by or adjacent to recent collection and per-space summaries.
+- Compact connector, authentication, and coverage warnings only when they block or degrade results.
+
+The Insights view shall not show space selection, activity-window controls, connection forms, retention controls, or the full configuration preview. A blocking warning shall link to the relevant Settings subsection.
 
 ### 7.3 Action inbox
 
 Each action appears as a compact card. Expanding it reveals source context, rationale, draft or recommendation, connector evidence, confidence, and user status controls. The application shall prioritize traceability over decorative scoring.
 
+Actions shall be the first results region after the scan header on narrow layouts. The UI shall retain filter context after reviewing or correcting an action so that triage does not repeatedly reset the user's position.
+
 ### 7.4 Configuration
 
-Configuration areas:
+The header Settings control shall open a dedicated Settings view. Settings shall use a short subsection navigation or accordion so only one major configuration group needs to be visually dominant at a time. Configuration areas, in order, are:
 
-- Webex account and permissions.
-- Collections and selected spaces.
-- Space-catalog activity window, including an explicit “All activity” option.
-- Schedule, time zone, backfill, and catch-up behavior.
-- Summary length, language, and response tone.
-- Action categories and confidence threshold.
-- Data retention and deletion.
-- Model provider/endpoint and usage budget.
-- MCP/connectors, tool allow-lists, and connector scope.
-- Audit log and diagnostics.
+1. **Accounts and privacy:** Webex account and permissions; model provider, disclosure, acknowledgement, and usage budget.
+2. **Spaces and collections:** Watched Collections; separate Direct messages and Group spaces tabs; search, bulk selection, and activity-window controls including explicit All activity.
+3. **Scanning and retention:** Schedule, time zone, backfill, catch-up behavior, retention, purge, and deletion.
+4. **Insight preferences:** Summary length and language; response tone; action categories and confidence threshold.
+5. **Connectors:** MCP/connectors, read-only operation allow-lists, resource scope, and connection health.
+6. **System status and safeguards:** Model readiness, app-open scheduler, retention, Webex authorization, connector state, external-write denial, audit log, and content-free diagnostics.
+
+Settings shall distinguish unapplied edits from saved values, disable Save when nothing changed, and warn before navigation if a partially edited form would otherwise be discarded. Saving one subsection shall not submit or overwrite unrelated subsections.
+
+### 7.5 Navigation and focus
+
+- The application header shall contain the product name, compact service health, the current view indicator, and the Settings control. When Settings is open, the same location shall offer a clear **Back to Insights** control.
+- Insights shall remain useful without opening Settings after initial setup. Configuration success messages shall remain in Settings; only blockers and result-quality warnings shall surface in Insights.
+- The application shall not introduce a third top-level view for scans, actions, summaries, drafts, or recommendations in release 1. Those belong to the single Insights workspace.
+- Keyboard focus shall move to the opened view heading when switching views. Tabs and accordions shall follow WAI-ARIA keyboard behavior, expose selection/expanded state, and retain a visible focus indicator.
 
 ## 8. System architecture
 
@@ -603,6 +630,7 @@ Targets apply to a reference workload of 100 selected spaces and 5,000 new messa
 - Conform to WCAG 2.2 AA for keyboard operation, focus, semantics, color contrast, and screen-reader labels.
 - Do not encode action category, confidence, urgency, or status by color alone.
 - Copy and external-navigation controls require descriptive accessible names.
+- The top-level Insights/Settings switch and Direct messages/Group spaces tabs shall be fully keyboard operable and announce the active view, active tab, visible count, and selected count.
 
 ### 12.4 Observability
 
@@ -778,6 +806,11 @@ OS credential storage with non-secret references in the local configuration file
 13. Before the first model-enabled scan, the UI discloses that selected message content is sent to OpenAI and may be retained in OpenAI abuse-monitoring logs under its default API data controls; the scan cannot proceed until the user acknowledges this locally.
 14. With the default 30-day catalog activity window, unselected group and direct spaces older than the cutoff are omitted; recently active spaces are shown; selected older spaces remain visible, labelled, and monitored; and spaces with unknown activity follow FR-SPACE-11.
 15. Large-account catalog tests use more than 3,000 synthetic spaces and prove stable ID pagination, local activity filtering, deterministic ordering, preservation of selected inactive spaces, and no duplicate or silently omitted eligible records.
+16. Insights is the default view and keeps Scan now, scan progress/status, Action inbox, and Space summaries together; configuration forms do not appear there.
+17. The Settings control opens the dedicated Settings view and Back to Insights restores the prior Insights filters without a page reload.
+18. Direct messages and Group spaces appear in separate accessible tabs with correct visible/selected counts, independent search and bulk-selection behavior, and selection preservation across tab switches and catalog refreshes.
+19. System status and safeguards appears under Settings. Only compact, actionable blockers or quality warnings are repeated in Insights, and each links to the relevant Settings subsection.
+20. Keyboard-only and screen-reader tests cover the top-level view switch, Settings subsections, space-type tabs, expandable insight cards, filter labels, focus placement, and responsive stacking.
 
 ### 16.2 Security acceptance
 
@@ -855,6 +888,7 @@ Suggested approval record:
 | 1.0-rc1 | Final approval candidate | User | 12 September 2026 | Release thresholds approved. A validated 64-case synthetic corpus was created at `evaluation/corpus.v1.jsonl`. Final specification approval remains pending. |
 | 1.0 | Approved for implementation | User | 12 September 2026 | The user explicitly approved specification 1.0 for implementation and authorized publishing the specification and local commits to the public `saransuresh1705/Action-Insights` repository. |
 | 1.1 | Approved for implementation | User | 13 September 2026 | The user approved the configurable 30-day space-catalog activity window, stable full-catalog enumeration followed by local filtering, preservation of selected inactive spaces, migration behavior, and large-account acceptance tests for Phase 1 implementation. |
+| 1.2-draft | Awaiting approval | User proposal recorded | 13 September 2026 | Proposes a focused Insights workspace, Settings-only configuration, configuration preview relocation, and separate Direct messages/Group spaces selection tabs, with progressive disclosure and compact filtering refinements. No application code may implement this draft until the user approves version 1.2. |
 
 ## 19. Decision register
 
@@ -875,6 +909,7 @@ Suggested approval record:
 | D-13 | Which repository is canonical for specification and application code? | **Approved by the user on 12 September 2026:** `https://github.com/saransuresh1705/Action-Insights`. |
 | D-14 | How shall OAuth tokens, client secrets, API keys, and connector secrets be stored? | **Approved by the user on 12 September 2026:** OS credential store; local configuration contains references only. Plaintext secret files are excluded. |
 | D-15 | Should the selectable Webex space catalog be restricted by recent activity? | **Approved by the user on 13 September 2026:** default to spaces active within the previous 30 days, make the window configurable, enumerate via stable room-ID pagination and filter locally, and preserve already-selected spaces outside the window. |
+| D-16 | How should configuration and insight information be segregated in the local UI? | **Proposed by the user on 13 September 2026; awaiting approval of specification 1.2:** use Insights and Settings as the only top-level views; keep scanning and results together in Insights; move all configuration and the configuration preview to Settings; use separate Direct messages and Group spaces tabs for selection. |
 
 ## 20. Risks and mitigations
 
@@ -892,6 +927,7 @@ Suggested approval record:
 | Cross-space leakage in summaries | Confidentiality breach. | Per-space partitions, evidence validation, isolation tests. |
 | Sensitive direct-message content appears in logs | Confidentiality breach. | Content-free allow-listed structured logging, keyed identifier hashes, automated log-capture tests, and no externally transmitted diagnostics. |
 | Recommendations mistaken for completed work | Miscommunication. | Explicit labels, no completion claims, no automatic resolve, no send/write capability. |
+| Configuration density distracts from actionable information | Slower triage and accidental changes while reviewing insights. | Default to a focused Insights view, isolate configuration under Settings, use progressive disclosure, and surface only actionable blockers in Insights. |
 
 ## 21. External platform findings and references
 
@@ -923,4 +959,4 @@ The specification is ready for implementation approval only when:
 - Release-1 acceptance thresholds are approved and the synthetic evaluation corpus exists, validates against its documented schema, and contains the required scenario coverage.
 - The approval table identifies a final version and approver.
 
-All conditions above are satisfied for specification 1.1. The user approved this version for implementation on 13 September 2026.
+All baseline release conditions are satisfied for specification 1.1, which the user approved for implementation on 13 September 2026. The UI changes in specification 1.2-draft remain unapproved and shall not be implemented until the user explicitly approves version 1.2.
