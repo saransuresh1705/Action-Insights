@@ -16,7 +16,12 @@ import type {
   WatchedCollectionCatalog,
   WatchedCollectionView,
 } from "../shared/contracts.js";
-import { ACTION_CATEGORIES } from "../shared/contracts.js";
+
+const ACTION_CATEGORIES: readonly ActionCategory[] = [
+  "Reply required", "Acknowledgement", "Decision / approval", "Review / feedback",
+  "External work item", "Research / information", "Meeting / scheduling", "Follow-up / reminder",
+  "Blocker / dependency", "Risk / escalation", "Delegation candidate", "FYI / no action", "Ambiguous",
+];
 
 const statusElement = requiredElement("service-status");
 const modelElement = requiredElement("model-status");
