@@ -1,5 +1,5 @@
 export const APP_NAME = "Webex Action Insights";
-export const APP_VERSION = "0.4.0";
+export const APP_VERSION = "0.4.1";
 
 export type ReasoningEffort = "medium" | "high";
 

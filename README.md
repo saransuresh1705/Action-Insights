@@ -4,7 +4,7 @@ Action Insights is a local-first application that reviews selected Webex convers
 
 ## Project status
 
-**Implementation phase — specification 1.1 is approved.**
+**Implementation phase — specification 1.2 is approved.**
 
 The authoritative product and technical specification is [docs/technical-specification.md](docs/technical-specification.md). All product changes must be proposed there, reviewed, and approved before implementation.
 
@@ -19,10 +19,12 @@ The current foundation includes:
 - GET-only space and message adapters with safe pagination and rate-limit handling;
 - a configurable 30-day recent-activity catalog filter that preserves selected older spaces;
 - encrypted SQLite storage for message text and sensitive display names;
-- app-local Watched Collections and manual incremental scans; and
+- app-local Watched Collections and manual incremental scans;
 - a constrained OpenAI Responses adapter with structured outputs, evidence grounding, and minimized-storage controls;
-- encrypted per-space summaries and action candidates with locally preserved review feedback; and
-- an accessible local dashboard for connection, discovery, selection, summaries, action review, and scan progress.
+- encrypted per-space summaries and action candidates with locally preserved review feedback;
+- an accessible, focused Insights workspace with configuration isolated under Settings;
+- separate Direct messages and Group spaces selection tabs with selection-safe search and bulk controls; and
+- compact filtering and progressive disclosure for summaries, evidence, and action review.
 
 Response drafting, read-only enterprise connectors, deletion reconciliation, and production hardening remain future implementation slices.
 
