@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 1.0 |
-| Status | **Approved for implementation** |
-| Date | 12 September 2026 |
+| Document version | 1.1-draft |
+| Status | **Pending approval — specification 1.0 remains the approved implementation baseline** |
+| Date | 13 September 2026 |
 | Intended deployment | Single-user, local-first application |
 | Primary user | The authenticated Webex user |
 | Canonical repository | `https://github.com/saransuresh1705/Action-Insights` |
@@ -124,6 +124,16 @@ A message or message thread that the application believes may require attention 
 **FR-SPACE-06** The app shall show spaces it can no longer access and allow removal from a collection without deleting historical derived insights unless the user chooses to do so.
 
 **FR-SPACE-07** Direct-message spaces shall be included in the release-1 space catalog and default monitoring scope. The user may deselect individual direct-message spaces or exclude all direct messages. Their inclusion does not relax any privacy, isolation, logging, retention, or external-processing control.
+
+**FR-SPACE-08** The space catalog shall default to a rolling 30-day activity window. An unselected space is catalog-eligible only when its Webex `lastActivity` value is at or after the cutoff calculated from the current instant. The activity window shall be configurable in the UI; disabling it shall require the user to choose an explicit “All activity” option.
+
+**FR-SPACE-09** Webex does not expose a reliable server-side “last activity after” filter for rooms. The ingestion adapter shall therefore enumerate the lightweight room catalog using stable `sortBy=id` pagination and the largest supported safe page size, then apply the activity-window filter locally. It shall not use `sortBy=lastactivity` as the completeness mechanism because Webex documents anomalous results for users or bots in more than 3,000 spaces.
+
+**FR-SPACE-10** A space already selected in a Watched Collection shall remain visible and selected if it later falls outside the activity window. The UI shall label it “Outside activity window.” It shall continue to be scanned until the user removes it; catalog filtering shall never silently change monitoring scope.
+
+**FR-SPACE-11** A space without a valid `lastActivity` value shall be excluded from the filtered discovery list unless it is already selected. A selected space with no valid activity timestamp shall remain visible with an “Activity unknown” label.
+
+**FR-SPACE-12** The same activity-window rules shall apply to group spaces and direct-message spaces. This catalog filter does not change message backfill, message retention, privacy, or logging rules.
 
 ### 6.3 Scheduling and ingestion
 
@@ -312,7 +322,7 @@ The adapter shall derive the UUIDs only from validated Webex API identifiers. Un
 3. Connect Webex through OAuth and review read-only scopes.
 4. Discover spaces.
 5. Create one or more Watched Collections and select spaces.
-6. Select scan schedule and backfill window.
+6. Review the default 30-day catalog activity window, then select the scan schedule and message backfill window.
 7. Configure summary and action preferences.
 8. Optionally enable read-only connectors.
 9. Review estimated data scope and confirm first scan.
@@ -338,6 +348,7 @@ Configuration areas:
 
 - Webex account and permissions.
 - Collections and selected spaces.
+- Space-catalog activity window, including an explicit “All activity” option.
 - Schedule, time zone, backfill, and catch-up behavior.
 - Summary length, language, and response tone.
 - Action categories and confidence threshold.
@@ -443,7 +454,7 @@ The required repository conventions are:
 | Entity | Key fields |
 |---|---|
 | UserProfile | Webex person ID, display name, email hash/display policy, time zone, preferences |
-| Space | room ID, title, type, team ID if present, access status, last activity |
+| Space | room ID, title, type, team ID if present, access status, last activity, activity-window eligibility |
 | WatchedCollection | ID, name, description, schedule override, summary settings |
 | CollectionSpace | collection ID, room ID, included state, sensitivity policy |
 | SyncCursor | room ID, last successful timestamp/message ID, overlap marker, last result |
@@ -477,6 +488,7 @@ retention:
   derived_insight_days: 90
 webex:
   oauth_client_id: non-secret-client-id
+  catalog_activity_window_days: 30 # null means the user explicitly selected "All activity"
   credential_ref: os-keychain://webex-action-insights/webex-oauth
 model:
   provider: openai
@@ -493,6 +505,8 @@ connectors:
 ```
 
 The checked-in repository may contain a `.example` file with placeholders only.
+
+When specification 1.1 is approved and implemented, a configuration that omits `webex.catalog_activity_window_days` shall migrate to the default value of 30. Existing Watched Collection membership and selected-space scan scope shall be preserved. Non-selected catalog metadata outside the window need not be newly persisted and may be removed during catalog reconciliation; this migration shall not delete retained messages or derived insights before their independently configured retention deadlines.
 
 ### 10.2 Secrets
 
@@ -605,6 +619,8 @@ Local diagnostics shall include scan timing, API status codes, retry counts, spa
 ### 13.1 Webex ingestion
 
 Preferred baseline: Webex REST APIs with OAuth, deterministic pagination, and scheduled polling. This aligns directly with the user's fixed-interval requirement and works for a local app without a publicly reachable webhook endpoint.
+
+Room discovery shall use stable room-ID ordering and locally evaluate the configurable activity-window cutoff. The public List Rooms API exposes sorting and pagination but no reliable member-room filter for `lastActivity`. Its `from` and `to` parameters describe when organization-public spaces were made public and shall not be misused as activity filters. The UI may receive only eligible and previously selected spaces, but the service still has to retrieve lightweight metadata for the full joined-room catalog during reconciliation.
 
 Webhooks or WebSocket events may be evaluated later as hints for freshness, but scheduled reconciliation remains the source of completeness. Webex webhook payloads omit sensitive message text and require an authenticated follow-up fetch.
 
@@ -760,6 +776,8 @@ OS credential storage with non-secret references in the local configuration file
 11. User can purge all local data and disconnect credentials.
 12. Partial scans and stale insights are unmistakably labelled.
 13. Before the first model-enabled scan, the UI discloses that selected message content is sent to OpenAI and may be retained in OpenAI abuse-monitoring logs under its default API data controls; the scan cannot proceed until the user acknowledges this locally.
+14. With the default 30-day catalog activity window, unselected group and direct spaces older than the cutoff are omitted; recently active spaces are shown; selected older spaces remain visible, labelled, and monitored; and spaces with unknown activity follow FR-SPACE-11.
+15. Large-account catalog tests use more than 3,000 synthetic spaces and prove stable ID pagination, local activity filtering, deterministic ordering, preservation of selected inactive spaces, and no duplicate or silently omitted eligible records.
 
 ### 16.2 Security acceptance
 
@@ -792,7 +810,7 @@ No phase begins until its specification and predecessor exit criteria are approv
 
 ### Phase 1 — Read-only ingestion and local UI shell
 
-- OAuth, space catalog, Watched Collections, scheduler, incremental ingestion, encrypted store, diagnostics.
+- OAuth, activity-window-filtered space catalog, Watched Collections, scheduler, incremental ingestion, encrypted store, diagnostics.
 - No model or connectors yet.
 
 ### Phase 2 — Summaries and action detection
@@ -836,6 +854,7 @@ Suggested approval record:
 | 0.9-draft | Default OpenAI retention accepted | User | 12 September 2026 | D-06 revised: OpenAI's default API abuse-monitoring retention is accepted. Formal Cisco authorization and ZDR verification removed as application gates; minimized-storage request controls remain mandatory. Overall spec remains unapproved. |
 | 1.0-rc1 | Final approval candidate | User | 12 September 2026 | Release thresholds approved. A validated 64-case synthetic corpus was created at `evaluation/corpus.v1.jsonl`. Final specification approval remains pending. |
 | 1.0 | Approved for implementation | User | 12 September 2026 | The user explicitly approved specification 1.0 for implementation and authorized publishing the specification and local commits to the public `saransuresh1705/Action-Insights` repository. |
+| 1.1-draft | Pending approval | — | 13 September 2026 | Adds a configurable 30-day space-catalog activity window, stable full-catalog enumeration followed by local filtering, preservation of selected inactive spaces, migration behavior, and large-account acceptance tests. Specification 1.0 remains the approved implementation baseline until this revision is explicitly approved. |
 
 ## 19. Decision register
 
@@ -855,6 +874,7 @@ Suggested approval record:
 | D-12 | Should file attachments ever be analyzed? | **Approved by the user on 12 September 2026:** no attachment-content analysis in release 1. |
 | D-13 | Which repository is canonical for specification and application code? | **Approved by the user on 12 September 2026:** `https://github.com/saransuresh1705/Action-Insights`. |
 | D-14 | How shall OAuth tokens, client secrets, API keys, and connector secrets be stored? | **Approved by the user on 12 September 2026:** OS credential store; local configuration contains references only. Plaintext secret files are excluded. |
+| D-15 | Should the selectable Webex space catalog be restricted by recent activity? | **Proposed by the user on 13 September 2026; pending specification 1.1 approval:** default to spaces active within the previous 30 days, make the window configurable, enumerate via stable room-ID pagination and filter locally, and preserve already-selected spaces outside the window. |
 
 ## 20. Risks and mitigations
 
@@ -863,6 +883,7 @@ Suggested approval record:
 | Native Webex sections unavailable via API | Cannot automatically synchronize user-created Webex sections. | Approved app-local Watched Collections with bulk selection and optional link import; no UI scraping. |
 | Exact-message desktop URI is undocumented and changes | Exact navigation may stop working after a Webex update. | Isolated validated adapter, mandatory release test, telemetry-free health warning, documented space-link fallback, no fabricated HTTPS link. |
 | Large initial history and API throttling | Slow/incomplete backfill. | Bounded default backfill, pagination, resumable cursors, `Retry-After`, transparent progress. |
+| Large joined-space catalog and unreliable recent-activity ordering | Slow discovery, pagination loops, or missing/repeated spaces for accounts with more than 3,000 memberships. | Enumerate with stable `sortBy=id` pagination and a safe maximum page size, filter by `lastActivity` locally, preserve selected inactive spaces, and test with a catalog above 3,000 spaces. |
 | False action detection | Noise or incorrect sense of obligation. | Evidence, confidence threshold, Needs review, feedback, eval corpus. |
 | Missed actions | User overlooks work. | Conservative candidate recall, periodic reconciliation, measurable evaluation, no claim of completeness. |
 | Prompt injection in messages or connected content | Data leakage or unsafe tool use. | Untrusted-content boundaries, allow-listed read tools, policy broker, schema validation, tests. |
@@ -878,6 +899,7 @@ These links support the feasibility assumptions in this draft; platform behavior
 
 - Webex states that an OAuth integration acts on a user's behalf and should request only necessary scopes: [Webex Integrations](https://developer.webex.com/admin/docs/integrations) and [Webex Authentication](https://developer.webex.com/messaging/docs/authentication).
 - The Messages API applies to rooms in which the user is a member: [Webex Messages API](https://developer.webex.com/messaging/docs/api/v1/messages).
+- The List Rooms API documents room pagination, `lastActivity`, supported sorting, and the known `lastactivity` anomaly for memberships above 3,000 spaces; it does not provide a member-room “active after” filter: [Webex List Rooms API](https://developer.webex.com/messaging/docs/api/v1/rooms/list-rooms).
 - Webex REST APIs paginate large collections and return HTTP 429 with `Retry-After`; `/messages` limits are dynamically adjusted: [Webex REST API basics and rate limiting](https://developer.webex.com/messaging/docs/basics).
 - Message webhooks contain metadata and require an authenticated fetch for sensitive message text: [Webex webhooks guide](https://developer.webex.com/messaging/docs/api/guides/webhooks).
 - Webex documents custom end-user space sections, including up to 50 sections and 500 spaces per section, but the reviewed public room/message references do not document a section API: [Webex App space sections](https://help.webex.com/en-us/article/uaayuo).
@@ -901,4 +923,4 @@ The specification is ready for implementation approval only when:
 - Release-1 acceptance thresholds are approved and the synthetic evaluation corpus exists, validates against its documented schema, and contains the required scenario coverage.
 - The approval table identifies a final version and approver.
 
-All conditions above are satisfied for specification 1.0. The user approved this version for implementation on 12 September 2026. Development may proceed within this approved scope; later product or behavioral changes remain subject to the specification-first policy in §18.
+All conditions above are satisfied for specification 1.0. The user approved that version for implementation on 12 September 2026. Specification 1.1-draft introduces the catalog activity-window change requested on 13 September 2026 and is not approved for implementation until the user explicitly approves that exact revision under §18.
