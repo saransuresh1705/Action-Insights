@@ -220,6 +220,9 @@ test("protects analysis acknowledgement and local action feedback routes", async
     },
     acknowledgeRetention() { acknowledged = true; },
     list() { return { summaries: [], actions: [] }; },
+    async generateDraft(_id, tone) {
+      return { text: "Could you share the missing detail?", tone, clarifyingQuestions: ["Which detail?"], generatedAt: "2026-09-12T00:00:00.000Z" };
+    },
     updateAction(id, input) {
       receivedStatus = input.status ?? "";
       if (id !== "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") return null;
@@ -230,6 +233,8 @@ test("protects analysis acknowledgement and local action feedback routes", async
         sourceMessageId: "message", sourceAuthor: "Participant", sourceTimestamp: "2026-09-12T00:00:00.000Z",
         sourceSnippet: "Snippet", sourceUrl: "webexteams://im?space=room", compatibilityWarning: "Warning",
         contextPreview: "Context", evidenceMessageIds: ["message"], modelName: "gpt-5.6-sol",
+        responseDraft: { text: "Could you clarify?", tone: "neutral", clarifyingQuestions: [], generatedAt: "2026-09-12T00:00:00.000Z" },
+        connectorEvidence: [], connectorWarnings: [],
         analyzedAt: "2026-09-12T00:00:00.000Z", stale: false,
       };
     },
@@ -260,4 +265,10 @@ test("protects analysis acknowledgement and local action feedback routes", async
   });
   assert.equal(feedback.status, 200);
   assert.equal(receivedStatus, "Reviewed");
+  const draft = await fetch(`${baseUrl}/api/actions/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/draft`, {
+    method: "POST", headers: { Cookie: cookie, "X-Action-Insights-Request": "1", "Content-Type": "application/json" },
+    body: JSON.stringify({ tone: "warm" }),
+  });
+  assert.equal(draft.status, 200);
+  assert.equal(((await draft.json()) as { tone: string }).tone, "warm");
 });

@@ -1,5 +1,5 @@
 export const APP_NAME = "Webex Action Insights";
-export const APP_VERSION = "0.4.1";
+export const APP_VERSION = "0.5.0";
 
 export type ReasoningEffort = "medium" | "high";
 
@@ -108,6 +108,52 @@ export const ACTION_CATEGORIES = [
 export type ActionCategory = (typeof ACTION_CATEGORIES)[number];
 export type ActionStatus = "New" | "Reviewed" | "In progress" | "Snoozed" | "Resolved" | "Dismissed" | "Not mine";
 export type ConfidenceLevel = "High" | "Medium" | "Low";
+export type ResponseTone = "concise" | "neutral" | "warm" | "formal";
+
+export interface ResponseDraftView {
+  readonly text: string;
+  readonly tone: ResponseTone;
+  readonly clarifyingQuestions: readonly string[];
+  readonly generatedAt: string;
+}
+
+export interface ActionRecommendationView {
+  readonly steps: readonly string[];
+  readonly missingInformation: readonly string[];
+  readonly completionCriteria: readonly string[];
+  readonly facts: readonly string[];
+  readonly inferences: readonly string[];
+  readonly userDecisions: readonly string[];
+  readonly sideEffectingActions: readonly string[];
+}
+
+export interface ConnectorEvidenceView {
+  readonly id: string;
+  readonly connector: "jira";
+  readonly itemId: string;
+  readonly title: string;
+  readonly status: string;
+  readonly url: string;
+  readonly retrievedAt: string;
+  readonly stale: boolean;
+}
+
+export interface ConnectorStatusView {
+  readonly id: "jira";
+  readonly label: "Jira";
+  readonly enabled: boolean;
+  readonly credentialConfigured: boolean;
+  readonly allowedOperations: readonly ["get_issue"];
+  readonly allowedProjects: readonly string[];
+  readonly maxCallsPerAnalysis: number;
+  readonly writesAllowed: false;
+  readonly message: string;
+}
+
+export interface ConnectorCatalog {
+  readonly connectors: readonly ConnectorStatusView[];
+  readonly deniedOperationKinds: readonly ["WRITE", "SEND", "DELETE", "APPROVE", "MERGE", "TRANSITION", "INVITE", "RUN"];
+}
 
 export interface AnalysisReadiness {
   readonly modelName: string;
@@ -164,6 +210,10 @@ export interface ActionCandidateView {
   readonly compatibilityWarning: string;
   readonly contextPreview: string;
   readonly evidenceMessageIds: readonly string[];
+  readonly responseDraft?: ResponseDraftView;
+  readonly recommendation?: ActionRecommendationView;
+  readonly connectorEvidence: readonly ConnectorEvidenceView[];
+  readonly connectorWarnings: readonly string[];
   readonly modelName: string;
   readonly analyzedAt: string;
   readonly stale: boolean;

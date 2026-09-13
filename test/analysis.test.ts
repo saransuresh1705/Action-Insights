@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_CONFIGURATION } from "../src/server/config.js";
 import { AnalysisService } from "../src/server/analysis/service.js";
-import { AnalysisValidationError, groundAnalysis, parseModelAnalysis } from "../src/server/analysis/grounding.js";
+import { AnalysisValidationError, groundAnalysis, parseDraft, parseModelAnalysis } from "../src/server/analysis/grounding.js";
 import { OpenAIResponsesModelAdapter } from "../src/server/analysis/openai.js";
 import type { ModelAnalysisOutput, SpaceAnalysisInput } from "../src/server/analysis/types.js";
 import type { SecretStore } from "../src/server/secrets.js";
@@ -15,6 +15,8 @@ const input: SpaceAnalysisInput = {
   periodStart: "2026-09-01T00:00:00.000Z",
   periodEnd: "2026-09-02T00:00:00.000Z",
   coverage: "complete",
+  connectorEvidence: [],
+  connectorWarnings: [],
   messages: [{
     id: "m1",
     authorId: "colleague-private-id",
@@ -37,6 +39,17 @@ const output: ModelAnalysisOutput = {
     confidenceScore: 0.95, rationale: "USER was directly asked to review.", owner: "USER",
     dueDate: "2026-09-03", dueDateInferred: false, urgency: "normal", dependencies: [],
     recommendedNextStep: "Review the plan and provide feedback.", sourceMessageId: "m1", evidenceMessageIds: ["m1"],
+    responseDraft: null,
+    recommendation: {
+      steps: ["Open the plan and review it against the stated goals.", "Prepare feedback for the requester."],
+      missingInformation: ["The plan artifact is not included in message content."],
+      completionCriteria: ["Feedback is ready for the requester."],
+      facts: ["A review was requested by 2026-09-03."],
+      inferences: ["The plan must be obtained before review."],
+      userDecisions: ["Decide which feedback to share."],
+      sideEffectingActions: ["Share feedback in the appropriate system."],
+    },
+    connectorEvidenceIds: [],
   }],
 };
 
@@ -60,6 +73,45 @@ test("rejects cross-space or fabricated evidence identifiers", () => {
 test("parses only the versioned structured output shape", () => {
   assert.deepEqual(parseModelAnalysis(output), output);
   assert.throws(() => parseModelAnalysis({ summary: {}, actions: [] }), AnalysisValidationError);
+});
+
+test("grounds a copy-only reply draft and rejects unsupported completion claims", () => {
+  const reply: ModelAnalysisOutput = {
+    ...output,
+    actions: [{
+      ...output.actions[0]!,
+      primaryCategory: "Reply required",
+      responseDraft: { text: "Could you share the plan link so I can review it?", tone: "neutral", clarifyingQuestions: ["Where is the plan?"] },
+      recommendation: null,
+    }],
+  };
+  const grounded = groundAnalysis(input, "Private room", reply, "gpt-5.6-sol", "2026-09-02T01:00:00.000Z");
+  assert.equal(grounded.actions[0]?.responseDraft?.tone, "neutral");
+  assert.equal(grounded.actions[0]?.responseDraft?.generatedAt, "2026-09-02T01:00:00.000Z");
+  assert.throws(() => parseDraft({
+    text: "I have completed and approved the work.", tone: "formal", clarifyingQuestions: [],
+  }), /completion claim/u);
+});
+
+test("grounds only connector evidence IDs supplied by the bounded broker", () => {
+  const connectorInput: SpaceAnalysisInput = {
+    ...input,
+    connectorEvidence: [{
+      id: "evidence-1", connector: "jira", itemId: "SAFE-12", title: "Plan review",
+      status: "Open", url: "https://jira.example.test/browse/SAFE-12",
+      retrievedAt: "2026-09-02T00:00:00.000Z", stale: false,
+    }],
+  };
+  const cited: ModelAnalysisOutput = {
+    ...output,
+    actions: [{ ...output.actions[0]!, connectorEvidenceIds: ["evidence-1"] }],
+  };
+  assert.equal(groundAnalysis(connectorInput, "Private room", cited, "gpt-5.6-sol").actions[0]?.connectorEvidence[0]?.itemId, "SAFE-12");
+  const fabricated: ModelAnalysisOutput = {
+    ...output,
+    actions: [{ ...output.actions[0]!, connectorEvidenceIds: ["fabricated"] }],
+  };
+  assert.throws(() => groundAnalysis(connectorInput, "Private room", fabricated, "gpt-5.6-sol"), /connector evidence/u);
 });
 
 test("OpenAI adapter applies minimized-storage controls and participant aliases", async () => {
@@ -94,6 +146,24 @@ test("adapter retries one invalid structured result", async () => {
   assert.equal(calls, 2);
 });
 
+test("adapter generates a tone-controlled draft with the same minimized-storage profile", async () => {
+  let requestBody: Record<string, unknown> | undefined;
+  const adapter = new OpenAIResponsesModelAdapter(DEFAULT_CONFIGURATION, "local-test-key", async (_url, init) => {
+    requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({
+      output_text: JSON.stringify({ text: "Could you share the missing plan?", tone: "warm", clarifyingQuestions: ["Where is the plan?"] }),
+    }), { status: 200 });
+  });
+  const draft = await adapter.generateDraft({
+    tone: "warm", category: "Reply required", sourceSnippet: "Please review the plan.",
+    contextPreview: "Please review the plan.", rationale: "A reply is required.", clarifyingQuestions: [],
+  });
+  assert.equal(draft.tone, "warm");
+  assert.equal(requestBody?.store, false);
+  assert.equal(requestBody?.background, false);
+  assert.equal("tools" in (requestBody ?? {}), false);
+});
+
 test("analysis service requires both a local key and retention acknowledgement", async () => {
   class MemorySecrets implements SecretStore {
     public value: string | null = null;
@@ -114,7 +184,10 @@ test("analysis service requires both a local key and retention acknowledgement",
     secrets,
     database,
     { async getCurrentUserId() { return "user-private-id"; } },
-    () => ({ async analyze() { modelCalls += 1; return output; } }),
+    () => ({
+      async analyze() { modelCalls += 1; return output; },
+      async generateDraft() { return { text: "Could you share the plan?", tone: "neutral", clarifyingQuestions: [] }; },
+    }),
   );
   assert.equal(await service.analyze("room-1"), "skipped");
   secrets.value = "test-key";

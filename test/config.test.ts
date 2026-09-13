@@ -18,6 +18,8 @@ test("accepts the approved default configuration", () => {
   assert.equal(configuration.retention.rawMessageDays, 30);
   assert.equal(configuration.retention.derivedInsightDays, 90);
   assert.equal(configuration.webex.catalogActivityWindowDays, 30);
+  assert.equal(configuration.connectors.jira.enabled, false);
+  assert.equal(configuration.connectors.jira.maxCallsPerAnalysis, 3);
 });
 
 test("migrates a missing catalog activity window to 30 days and accepts explicit all activity", () => {
@@ -66,6 +68,23 @@ test("rejects unsupported fields so credentials cannot hide in configuration", (
   fixture.model.apiKey = "CANARY_PLAINTEXT_SECRET";
 
   assert.throws(() => validateConfiguration(fixture), /model contains unsupported fields: apiKey/);
+});
+
+test("migrates missing connector configuration and enforces Jira read boundaries", () => {
+  const missing = configurationFixture() as Record<string, unknown>;
+  delete missing.connectors;
+  assert.equal(validateConfiguration(missing).connectors.jira.enabled, false);
+
+  const enabled = configurationFixture() as { connectors: { jira: Record<string, unknown> } };
+  enabled.connectors.jira.enabled = true;
+  enabled.connectors.jira.allowedProjects = [];
+  assert.throws(() => validateConfiguration(enabled), /must not be empty/u);
+  enabled.connectors.jira.allowedProjects = ["SAFE"];
+  enabled.connectors.jira.baseUrl = "http://jira.example.test";
+  assert.throws(() => validateConfiguration(enabled), /HTTPS URL/u);
+  enabled.connectors.jira.baseUrl = "https://jira.example.test";
+  enabled.connectors.jira.credentialRef = "plain-token";
+  assert.throws(() => validateConfiguration(enabled), /os-keychain reference/u);
 });
 
 test("rejects any attempt to enable model response storage", () => {

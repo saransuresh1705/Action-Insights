@@ -852,6 +852,8 @@ No phase begins until its specification and predecessor exit criteria are approv
 
 ### Phase 3 — Drafts and read-only recommendations
 
+**Approved to begin by the user on 13 September 2026 against specification 1.2.**
+
 - Response drafts, copy flow, action planning, read-only connector broker, citations, policy denials.
 
 ### Phase 4 — Hardening and release
@@ -888,7 +890,7 @@ Suggested approval record:
 | 1.0-rc1 | Final approval candidate | User | 12 September 2026 | Release thresholds approved. A validated 64-case synthetic corpus was created at `evaluation/corpus.v1.jsonl`. Final specification approval remains pending. |
 | 1.0 | Approved for implementation | User | 12 September 2026 | The user explicitly approved specification 1.0 for implementation and authorized publishing the specification and local commits to the public `saransuresh1705/Action-Insights` repository. |
 | 1.1 | Approved for implementation | User | 13 September 2026 | The user approved the configurable 30-day space-catalog activity window, stable full-catalog enumeration followed by local filtering, preservation of selected inactive spaces, migration behavior, and large-account acceptance tests for Phase 1 implementation. |
-| 1.2 | Approved for implementation | User | 13 September 2026 | The user approved the focused Insights workspace, Settings-only configuration, configuration preview relocation, separate Direct messages/Group spaces selection tabs, progressive disclosure, and compact filtering refinements for Phase 2 implementation. |
+| 1.2 | Approved for implementation | User | 13 September 2026 | The user approved the focused Insights workspace, Settings-only configuration, configuration preview relocation, separate Direct messages/Group spaces selection tabs, progressive disclosure, and compact filtering refinements for Phase 2 implementation. Phase 3 development against this specification was explicitly approved on 13 September 2026. |
 
 ## 19. Decision register
 

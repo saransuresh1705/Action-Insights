@@ -1,4 +1,10 @@
-import type { ActionCategory } from "../../shared/contracts.js";
+import type {
+  ActionCategory,
+  ActionRecommendationView,
+  ConnectorEvidenceView,
+  ResponseDraftView,
+  ResponseTone,
+} from "../../shared/contracts.js";
 
 export interface AnalysisInputMessage {
   readonly id: string;
@@ -18,6 +24,8 @@ export interface SpaceAnalysisInput {
   readonly periodStart: string;
   readonly periodEnd: string;
   readonly coverage: "complete" | "partial";
+  readonly connectorEvidence: readonly ConnectorEvidenceView[];
+  readonly connectorWarnings: readonly string[];
 }
 
 export interface ModelSummaryOutput {
@@ -47,6 +55,9 @@ export interface ModelActionOutput {
   readonly recommendedNextStep: string;
   readonly sourceMessageId: string;
   readonly evidenceMessageIds: readonly string[];
+  readonly responseDraft: Omit<ResponseDraftView, "generatedAt"> | null;
+  readonly recommendation: ActionRecommendationView | null;
+  readonly connectorEvidenceIds: readonly string[];
 }
 
 export interface ModelAnalysisOutput {
@@ -56,4 +67,14 @@ export interface ModelAnalysisOutput {
 
 export interface ModelAdapter {
   analyze(input: SpaceAnalysisInput, signal?: AbortSignal): Promise<ModelAnalysisOutput>;
+  generateDraft(input: DraftGenerationInput, signal?: AbortSignal): Promise<Omit<ResponseDraftView, "generatedAt">>;
+}
+
+export interface DraftGenerationInput {
+  readonly tone: ResponseTone;
+  readonly category: "Reply required" | "Acknowledgement";
+  readonly sourceSnippet: string;
+  readonly contextPreview: string;
+  readonly rationale: string;
+  readonly clarifyingQuestions: readonly string[];
 }

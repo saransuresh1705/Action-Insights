@@ -3,6 +3,7 @@ import { APP_VERSION } from "../shared/contracts.js";
 import { ConfigurationStore, defaultConfigurationPath, loadConfiguration } from "./config.js";
 import { AnalysisService } from "./analysis/service.js";
 import { CollectionService } from "./collections.js";
+import { ReadOnlyConnectorBroker } from "./connectors/broker.js";
 import { assertLoopbackHost, createApplicationServer } from "./http-server.js";
 import { SafeLogger } from "./safe-logger.js";
 import { ScanCoordinator } from "./scan.js";
@@ -29,12 +30,13 @@ const webexOAuth = new WebexOAuthService(configuration, secretStore);
 const webexClient = new WebexReadOnlyClient(new WebexReadOnlyHttpClient());
 const webex = new WebexService(webexOAuth, webexClient, database, configurationStore);
 const collections = new CollectionService(database);
+const connectors = new ReadOnlyConnectorBroker(configuration, secretStore);
 const analysis = new AnalysisService(configuration, secretStore, database, {
   async getCurrentUserId() {
     const accessToken = await webexOAuth.getValidAccessToken();
     return (await webexClient.getCurrentUser(accessToken)).id;
   },
-});
+}, undefined, connectors);
 const scans = new ScanCoordinator(
   configuration,
   webexOAuth,
@@ -55,6 +57,7 @@ const server = createApplicationServer(configuration, {
   scheduler,
   configurationStore,
   analysis,
+  connectors,
 });
 
 server.listen(configuration.app.port, configuration.app.bindHost, () => {

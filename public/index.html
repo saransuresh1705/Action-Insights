@@ -149,6 +149,29 @@
           </div>
         </details>
 
+        <details id="connectors-settings" class="settings-group">
+          <summary><span>Read-only connectors</span><small>Jira evidence and policy limits</small></summary>
+          <div class="settings-content">
+            <section class="connector-panel" aria-labelledby="jira-connector-title">
+              <div>
+                <p class="eyebrow">First approved connector</p>
+                <h3 id="jira-connector-title">Jira read-only</h3>
+                <p id="jira-connector-status">Checking local connector configuration…</p>
+                <p id="jira-connector-scope" class="muted"></p>
+              </div>
+              <p class="notice">Jira configuration contains only its HTTPS base URL, project allow-list, call limit, and a Keychain reference. The broker exposes issue lookup only; create, edit, transition, comment, and delete operations are unavailable.</p>
+              <details>
+                <summary>Local setup instructions</summary>
+                <ol>
+                  <li>Set the Jira base URL, allowed project keys, and <code>enabled: true</code> in the local configuration file.</li>
+                  <li>Store a read-only Jira bearer token in macOS Keychain using <code>security add-generic-password -U -a jira -s webex-action-insights -w</code>.</li>
+                  <li>Restart the local app. No token is returned to browser code.</li>
+                </ol>
+              </details>
+            </section>
+          </div>
+        </details>
+
         <details class="settings-group">
           <summary><span>System status and safeguards</span><small>Schedule, retention, and policy</small></summary>
           <div class="settings-content card-grid">

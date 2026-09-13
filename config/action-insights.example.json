@@ -36,5 +36,14 @@
     "reasoningEffort": "medium",
     "store": false,
     "credentialRef": "os-keychain://webex-action-insights/openai"
+  },
+  "connectors": {
+    "jira": {
+      "enabled": false,
+      "baseUrl": "https://jira.example.invalid",
+      "allowedProjects": [],
+      "maxCallsPerAnalysis": 3,
+      "credentialRef": "os-keychain://webex-action-insights/jira"
+    }
   }
 }

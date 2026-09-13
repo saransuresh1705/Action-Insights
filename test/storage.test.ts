@@ -86,10 +86,14 @@ test("persists spaces, collections, messages, and cursors without plaintext cont
     recommendedNextStep: "Reply", sourceMessageId: "message-1", sourceAuthor: "Participant abc123",
     sourceTimestamp: "2026-09-12T10:00:00.000Z", sourceSnippet: "CANARY_PRIVATE_MESSAGE_BODY",
     sourceUrl: "webexteams://im?space=room-1", compatibilityWarning: "Fallback required", contextPreview: "Context",
-    evidenceMessageIds: ["message-1"], modelName: "gpt-5.6-sol", analyzedAt: "2026-09-12T11:00:00.000Z", stale: false,
+    evidenceMessageIds: ["message-1"],
+    responseDraft: { text: "Thanks—I'll review this.", tone: "neutral", clarifyingQuestions: [], generatedAt: "2026-09-12T11:00:00.000Z" },
+    connectorEvidence: [], connectorWarnings: [],
+    modelName: "gpt-5.6-sol", analyzedAt: "2026-09-12T11:00:00.000Z", stale: false,
   }]);
   assert.equal(database.listInsights().summaries[0]?.overview, "CANARY_PRIVATE_SUMMARY");
   assert.equal(database.listInsights().actions[0]?.rationale, "CANARY_PRIVATE_RATIONALE");
+  assert.equal(database.listInsights().actions[0]?.responseDraft?.text, "Thanks—I'll review this.");
   database.markInsightsStale("room-1");
   assert.equal(database.listInsights().actions[0]?.stale, true);
   const corrected = database.updateActionFeedback("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", { status: "Reviewed", owner: "Me" });

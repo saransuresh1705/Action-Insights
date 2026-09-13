@@ -1,7 +1,7 @@
 import type { AppConfiguration } from "../config.js";
-import type { ModelAdapter, ModelAnalysisOutput, SpaceAnalysisInput } from "./types.js";
-import { ANALYSIS_SYSTEM_PROMPT, SPACE_ANALYSIS_JSON_SCHEMA } from "./schema.js";
-import { AnalysisValidationError, parseModelAnalysis } from "./grounding.js";
+import type { DraftGenerationInput, ModelAdapter, ModelAnalysisOutput, SpaceAnalysisInput } from "./types.js";
+import { ANALYSIS_SYSTEM_PROMPT, DRAFT_JSON_SCHEMA, DRAFT_SYSTEM_PROMPT, SPACE_ANALYSIS_JSON_SCHEMA } from "./schema.js";
+import { AnalysisValidationError, parseDraft, parseModelAnalysis } from "./grounding.js";
 
 const RESPONSES_URL = "https://api.openai.com/v1/responses";
 
@@ -58,6 +58,35 @@ export class OpenAIResponsesModelAdapter implements ModelAdapter {
       ? validationError
       : new OpenAIModelError("OpenAI returned invalid structured output twice");
   }
+
+  public async generateDraft(input: DraftGenerationInput, signal?: AbortSignal) {
+    let validationError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const requestBody = minimizedStorageRequest(
+        this.configuration,
+        DRAFT_SYSTEM_PROMPT,
+        JSON.stringify(input),
+        "webex_response_draft_v1",
+        DRAFT_JSON_SCHEMA,
+      );
+      const response = await this.fetchImpl(RESPONSES_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(requestBody),
+        redirect: "error",
+        ...(signal === undefined ? {} : { signal }),
+      });
+      if (!response.ok) throw new OpenAIModelError(`OpenAI Responses request failed with status ${response.status}`);
+      try {
+        return parseDraft(JSON.parse(extractOutputText(await response.json() as unknown)) as unknown);
+      } catch (error: unknown) {
+        validationError = error;
+      }
+    }
+    throw validationError instanceof AnalysisValidationError
+      ? validationError
+      : new OpenAIModelError("OpenAI returned an invalid draft twice");
+  }
 }
 
 export function assertMinimizedStorageRequest(value: Record<string, unknown>): void {
@@ -104,7 +133,41 @@ function aliasInput(input: SpaceAnalysisInput): Record<string, unknown> {
       mentionedPeople: message.mentionedPeople.map((id) => alias(id)),
       hasAttachments: message.hasAttachments,
     })),
+    connectorEvidence: input.connectorEvidence.map((evidence) => ({
+      id: evidence.id,
+      connector: evidence.connector,
+      itemId: evidence.itemId,
+      title: evidence.title,
+      status: evidence.status,
+      url: evidence.url,
+      retrievedAt: evidence.retrievedAt,
+      stale: evidence.stale,
+    })),
+    connectorWarnings: input.connectorWarnings,
   };
+}
+
+function minimizedStorageRequest(
+  configuration: AppConfiguration,
+  developerPrompt: string,
+  userInput: string,
+  schemaName: string,
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  const body = {
+    model: configuration.model.name,
+    store: false,
+    background: false,
+    reasoning: { effort: configuration.model.reasoningEffort },
+    prompt_cache_options: { mode: "explicit" },
+    input: [
+      { role: "developer", content: developerPrompt },
+      { role: "user", content: userInput },
+    ],
+    text: { format: { type: "json_schema", name: schemaName, strict: true, schema } },
+  };
+  assertMinimizedStorageRequest(body);
+  return body;
 }
 
 function extractOutputText(value: unknown): string {

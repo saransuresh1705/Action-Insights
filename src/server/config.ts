@@ -42,6 +42,15 @@ export interface AppConfiguration {
     readonly store: false;
     readonly credentialRef: string;
   };
+  readonly connectors: {
+    readonly jira: {
+      readonly enabled: boolean;
+      readonly baseUrl: string;
+      readonly allowedProjects: readonly string[];
+      readonly maxCallsPerAnalysis: number;
+      readonly credentialRef: string;
+    };
+  };
 }
 
 export const DEFAULT_CONFIGURATION: AppConfiguration = {
@@ -78,6 +87,15 @@ export const DEFAULT_CONFIGURATION: AppConfiguration = {
     store: false,
     credentialRef: "os-keychain://webex-action-insights/openai",
   },
+  connectors: {
+    jira: {
+      enabled: false,
+      baseUrl: "https://jira.example.invalid",
+      allowedProjects: [],
+      maxCallsPerAnalysis: 3,
+      credentialRef: "os-keychain://webex-action-insights/jira",
+    },
+  },
 };
 
 type UnknownRecord = Record<string, unknown>;
@@ -109,6 +127,19 @@ function integerValue(value: unknown, label: string, minimum: number, maximum: n
     throw new Error(`${label} must be an integer between ${minimum} and ${maximum}`);
   }
   return value as number;
+}
+
+function booleanValue(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") throw new Error(`${label} must be a boolean`);
+  return value;
+}
+
+function httpsBaseUrl(value: unknown, label: string): string {
+  const parsed = new URL(stringValue(value, label));
+  if (parsed.protocol !== "https:" || parsed.username !== "" || parsed.password !== "" || parsed.search !== "" || parsed.hash !== "") {
+    throw new Error(`${label} must be an HTTPS URL without credentials, query, or fragment`);
+  }
+  return parsed.toString().replace(/\/$/u, "");
 }
 
 function catalogActivityWindowDays(value: unknown): number | null {
@@ -159,14 +190,18 @@ export function validateConfiguration(value: unknown): AppConfiguration {
   const storage = asRecord(root.storage, "storage");
   const webex = asRecord(root.webex, "webex");
   const model = asRecord(root.model, "model");
+  const connectors = asRecord(root.connectors ?? DEFAULT_CONFIGURATION.connectors, "connectors");
+  const jira = asRecord(connectors.jira ?? DEFAULT_CONFIGURATION.connectors.jira, "connectors.jira");
 
-  assertOnlyKeys(root, ["app", "scan", "retention", "storage", "webex", "model"], "configuration");
+  assertOnlyKeys(root, ["app", "scan", "retention", "storage", "webex", "model", "connectors"], "configuration");
   assertOnlyKeys(app, ["bindHost", "port", "timezone"], "app");
   assertOnlyKeys(scan, ["intervalMinutes", "initialBackfillDays", "overlapMinutes"], "scan");
   assertOnlyKeys(retention, ["rawMessageDays", "derivedInsightDays", "auditMetadataDays"], "retention");
   assertOnlyKeys(storage, ["dataDirectory", "encryptionKeyRef"], "storage");
   assertOnlyKeys(webex, ["oauthClientId", "oauthRedirectUri", "scopes", "credentialRef", "catalogActivityWindowDays"], "webex");
   assertOnlyKeys(model, ["provider", "name", "reasoningEffort", "store", "credentialRef"], "model");
+  assertOnlyKeys(connectors, ["jira"], "connectors");
+  assertOnlyKeys(jira, ["enabled", "baseUrl", "allowedProjects", "maxCallsPerAnalysis", "credentialRef"], "connectors.jira");
 
   const bindHost = stringValue(app.bindHost, "app.bindHost");
   if (!LOOPBACK_HOSTS.has(bindHost)) {
@@ -192,6 +227,14 @@ export function validateConfiguration(value: unknown): AppConfiguration {
   const scopes = stringArray(webex.scopes, "webex.scopes");
   if (new Set(scopes).size !== WEBEX_READ_SCOPES.length || WEBEX_READ_SCOPES.some((scope) => !scopes.includes(scope))) {
     throw new Error("webex.scopes must contain only the approved read-only scopes");
+  }
+  const allowedProjects = stringArray(jira.allowedProjects, "connectors.jira.allowedProjects").map((project) => project.toUpperCase());
+  if (allowedProjects.some((project) => !/^[A-Z][A-Z0-9_]*$/u.test(project)) || new Set(allowedProjects).size !== allowedProjects.length) {
+    throw new Error("connectors.jira.allowedProjects must contain unique Jira project keys");
+  }
+  const jiraEnabled = booleanValue(jira.enabled, "connectors.jira.enabled");
+  if (jiraEnabled && allowedProjects.length === 0) {
+    throw new Error("connectors.jira.allowedProjects must not be empty when Jira is enabled");
   }
 
   return {
@@ -227,6 +270,15 @@ export function validateConfiguration(value: unknown): AppConfiguration {
       reasoningEffort: model.reasoningEffort,
       store: false,
       credentialRef: credentialReference(model.credentialRef, "model.credentialRef"),
+    },
+    connectors: {
+      jira: {
+        enabled: jiraEnabled,
+        baseUrl: httpsBaseUrl(jira.baseUrl, "connectors.jira.baseUrl"),
+        allowedProjects,
+        maxCallsPerAnalysis: integerValue(jira.maxCallsPerAnalysis, "connectors.jira.maxCallsPerAnalysis", 1, 10),
+        credentialRef: credentialReference(jira.credentialRef, "connectors.jira.credentialRef"),
+      },
     },
   };
 }

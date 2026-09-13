@@ -5,9 +5,12 @@ import type {
   ActionStatus,
   AnalysisReadiness,
   ConfidenceLevel,
+  ConnectorCatalog,
   HealthResponse,
   InsightDashboard,
   PublicConfiguration,
+  ResponseDraftView,
+  ResponseTone,
   ScanStatus,
   SchedulerStatus,
   WebexAuthorizationStart,
@@ -68,6 +71,7 @@ let activeCollectionId = "";
 let savedSelection = new Set<string>();
 let draftSelection = new Set<string>();
 const spaceSearchByType = new Map<"direct" | "group", string>([["direct", ""], ["group", ""]]);
+const draftHistory = new Map<string, ResponseDraftView[]>();
 let webexReady = false;
 let modelReady = false;
 
@@ -130,13 +134,14 @@ void loadDashboard();
 
 async function loadDashboard(): Promise<void> {
   try {
-    const [health, configuration, webex, scheduler, scan, readiness] = await Promise.all([
+    const [health, configuration, webex, scheduler, scan, readiness, connectors] = await Promise.all([
       fetchJson<HealthResponse>("/api/health"),
       fetchJson<PublicConfiguration>("/api/configuration"),
       fetchJson<WebexConnectionStatus>("/api/webex/status"),
       fetchJson<SchedulerStatus>("/api/scheduler/status"),
       fetchJson<ScanStatus>("/api/scans/current"),
       fetchJson<AnalysisReadiness>("/api/analysis/readiness"),
+      fetchJson<ConnectorCatalog>("/api/connectors"),
     ]);
 
     statusElement.textContent = `${health.status.toUpperCase()} · v${health.version}`;
@@ -159,12 +164,25 @@ async function loadDashboard(): Promise<void> {
       : "Excluded";
     renderWebexStatus(webex);
     renderAnalysisReadiness(readiness);
+    renderConnectorStatus(connectors);
     renderScanStatus(scan);
     await Promise.all([loadCollections(), loadInsights()]);
   } catch {
     statusElement.textContent = "Service unavailable";
     statusElement.dataset.state = "error";
   }
+}
+
+function renderConnectorStatus(catalog: ConnectorCatalog): void {
+  const jira = catalog.connectors.find((connector) => connector.id === "jira");
+  if (jira === undefined) {
+    requiredElement("jira-connector-status").textContent = "Jira connector is unavailable.";
+    return;
+  }
+  requiredElement("jira-connector-status").textContent = jira.message;
+  requiredElement("jira-connector-scope").textContent = jira.allowedProjects.length === 0
+    ? `Allowed operation: issue lookup · maximum ${jira.maxCallsPerAnalysis} calls per analysis · no projects configured`
+    : `Allowed operation: issue lookup · projects ${jira.allowedProjects.join(", ")} · maximum ${jira.maxCallsPerAnalysis} calls per analysis`;
 }
 
 function renderAnalysisReadiness(readiness: AnalysisReadiness): void {
@@ -439,7 +457,11 @@ function renderInsights(): void {
     ? null
     : Date.now() - Number(filterPeriod.value) * 86_400_000;
   const actions = currentInsights.actions.filter((action) => {
-    const searchable = [action.recommendedNextStep, action.spaceTitle, action.rationale, action.sourceSnippet, action.category]
+    const searchable = [
+      action.recommendedNextStep, action.spaceTitle, action.rationale, action.sourceSnippet, action.category,
+      action.responseDraft?.text ?? "", ...(action.recommendation?.steps ?? []),
+      ...action.connectorEvidence.flatMap((evidence) => [evidence.itemId, evidence.title, evidence.status]),
+    ]
       .join(" ").toLocaleLowerCase();
     return (search === "" || searchable.includes(search))
       && (filterCollection.value === "" || action.collectionNames.includes(filterCollection.value))
@@ -551,8 +573,130 @@ function actionCard(action: ActionCandidateView): HTMLElement {
   const reviewBody = document.createElement("div");
   reviewBody.append(rationale, source, feedbackForm(action));
   review.append(reviewLabel, reviewBody);
-  article.append(header, review);
+  article.append(header, actionGuidance(action), review);
   return article;
+}
+
+function actionGuidance(action: ActionCandidateView): HTMLDetailsElement {
+  const details = document.createElement("details");
+  details.className = "action-guidance";
+  const summary = document.createElement("summary");
+  if (action.responseDraft !== undefined) {
+    summary.textContent = "Review response draft";
+    const body = document.createElement("div");
+    renderDraftBody(body, action);
+    details.append(summary, body);
+    return details;
+  }
+  summary.textContent = "Review recommended action plan";
+  const body = document.createElement("div");
+  const recommendation = action.recommendation;
+  if (recommendation === undefined) {
+    body.append(paragraph("No structured recommendation is available. Run a new model-enabled scan to generate Phase 3 guidance."));
+  } else {
+    const heading = document.createElement("h4");
+    heading.textContent = "Suggested steps";
+    body.append(heading, orderedList(recommendation.steps));
+    const groups: Array<[string, readonly string[]]> = [
+      ["Facts from available evidence", recommendation.facts],
+      ["Model inferences", recommendation.inferences],
+      ["Missing information", recommendation.missingInformation],
+      ["Decisions for you", recommendation.userDecisions],
+      ["Completion criteria", recommendation.completionCriteria],
+    ];
+    for (const [label, items] of groups) if (items.length > 0) body.append(detailList(label, items));
+    if (recommendation.sideEffectingActions.length > 0) {
+      const manual = document.createElement("div");
+      manual.className = "manual-action-notice";
+      const title = document.createElement("strong");
+      title.textContent = "Manual actions only";
+      manual.append(title, paragraph("The app cannot perform these operations. Review them and act in the source system only if appropriate."), orderedList(recommendation.sideEffectingActions));
+      body.append(manual);
+    }
+    if (action.connectorEvidence.length > 0) body.append(connectorEvidenceBlock(action));
+    for (const warning of action.connectorWarnings) {
+      const notice = paragraph(warning);
+      notice.className = "connector-warning";
+      body.append(notice);
+    }
+  }
+  details.append(summary, body);
+  return details;
+}
+
+function renderDraftBody(container: HTMLElement, action: ActionCandidateView): void {
+  const initial = action.responseDraft;
+  if (initial === undefined) return;
+  const history = draftHistory.get(action.id) ?? [initial];
+  draftHistory.set(action.id, history);
+  const latest = history.at(-1) as ResponseDraftView;
+  const draft = document.createElement("blockquote");
+  draft.className = "response-draft";
+  draft.textContent = latest.text;
+  const controls = document.createElement("div");
+  controls.className = "draft-controls";
+  const tone = selectField("Tone", ["concise", "neutral", "warm", "formal"], latest.tone);
+  const regenerate = document.createElement("button");
+  regenerate.type = "button";
+  regenerate.textContent = "Regenerate";
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = "button-secondary";
+  copy.textContent = "Copy response";
+  const feedback = document.createElement("output");
+  feedback.className = "copy-feedback";
+  feedback.setAttribute("aria-live", "polite");
+  copy.addEventListener("click", () => {
+    void navigator.clipboard.writeText(latest.text)
+      .then(() => { feedback.textContent = "Response copied. Nothing was sent."; })
+      .catch(() => { feedback.textContent = "Copy failed. Nothing was sent."; });
+  });
+  regenerate.addEventListener("click", () => {
+    regenerate.disabled = true;
+    feedback.textContent = "Generating a new local review draft…";
+    void postJson<ResponseDraftView>(`/api/actions/${action.id}/draft`, { tone: tone.select.value as ResponseTone })
+      .then((generated) => {
+        history.push(generated);
+        container.replaceChildren();
+        renderDraftBody(container, action);
+      })
+      .catch(() => { feedback.textContent = "Draft generation is unavailable. No message was sent."; regenerate.disabled = false; });
+  });
+  controls.append(tone.label, regenerate, copy, feedback);
+  container.replaceChildren(draft, controls);
+  if (latest.clarifyingQuestions.length > 0) container.append(detailList("Questions this draft preserves", latest.clarifyingQuestions));
+  if (history.length > 1) {
+    const earlier = history.slice(0, -1).map((item) => `${item.tone}: ${item.text}`);
+    container.append(detailList(`Earlier drafts in this session`, earlier));
+  }
+}
+
+function connectorEvidenceBlock(action: ActionCandidateView): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "connector-evidence";
+  const title = document.createElement("h4");
+  title.textContent = "Read-only connector evidence";
+  const list = document.createElement("ul");
+  for (const evidence of action.connectorEvidence) {
+    const item = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = evidence.url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = `${evidence.itemId}: ${evidence.title}`;
+    const metadata = document.createElement("small");
+    metadata.textContent = `${evidence.status} · retrieved ${new Date(evidence.retrievedAt).toLocaleString()}${evidence.stale ? " · possibly stale" : ""}`;
+    item.append(link, metadata);
+    list.append(item);
+  }
+  section.append(title, list);
+  return section;
+}
+
+function orderedList(items: readonly string[]): HTMLOListElement {
+  const list = document.createElement("ol");
+  for (const text of items) { const item = document.createElement("li"); item.textContent = text; list.append(item); }
+  return list;
 }
 
 function feedbackForm(action: ActionCandidateView): HTMLFormElement {

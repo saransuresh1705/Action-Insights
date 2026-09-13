@@ -11,10 +11,13 @@ import {
   type ActionStatus,
   type AnalysisReadiness,
   type ApiError,
+  type ConnectorCatalog,
   type HealthResponse,
   type InsightDashboard,
   type ScanStatus,
   type SchedulerStatus,
+  type ResponseDraftView,
+  type ResponseTone,
   type WatchedCollectionCatalog,
   type WatchedCollectionView,
   type WebexConnectionStatus,
@@ -42,6 +45,7 @@ export interface ServerOptions {
   readonly scheduler?: SchedulerFacade;
   readonly configurationStore?: ConfigurationFacade;
   readonly analysis?: AnalysisFacade;
+  readonly connectors?: ConnectorFacade;
 }
 
 export interface ConfigurationFacade {
@@ -78,6 +82,11 @@ export interface AnalysisFacade {
   acknowledgeRetention(): void;
   list(): InsightDashboard;
   updateAction(id: string, input: ActionFeedbackInput): ActionCandidateView | null;
+  generateDraft(id: string, tone: ResponseTone, signal?: AbortSignal): Promise<ResponseDraftView | null>;
+}
+
+export interface ConnectorFacade {
+  status(): Promise<ConnectorCatalog>;
 }
 
 export function createApplicationServer(configuration: AppConfiguration, options: ServerOptions): Server {
@@ -196,6 +205,32 @@ export function createApplicationServer(configuration: AppConfiguration, options
           sendJson(response, 200, options.analysis.list());
         }
         logger.info("http_request", { requestId, method, route: path, httpStatus: options.analysis === undefined ? 503 : 200 });
+        return;
+      }
+
+      if (method === "GET" && path === "/api/connectors") {
+        if (options.connectors === undefined) {
+          sendJson(response, 503, { error: "Connector broker unavailable" } satisfies ApiError);
+        } else {
+          sendJson(response, 200, await options.connectors.status());
+        }
+        logger.info("http_request", { requestId, method, route: path, httpStatus: options.connectors === undefined ? 503 : 200 });
+        return;
+      }
+
+      const draftMatch = /^\/api\/actions\/([a-f0-9]{32})\/draft$/u.exec(path);
+      if (method === "POST" && draftMatch?.[1] !== undefined) {
+        if (options.analysis === undefined) {
+          sendJson(response, 503, { error: "Analysis service unavailable" } satisfies ApiError);
+          logger.info("http_request", { requestId, method, route: "/api/actions/:id/draft", httpStatus: 503 });
+          return;
+        }
+        const body = await readJsonBody(request);
+        const tone = validateResponseTone(body.tone);
+        const draft = await options.analysis.generateDraft(draftMatch[1], tone);
+        if (draft === null) sendJson(response, 409, { error: "Draft generation is unavailable for this action" } satisfies ApiError);
+        else sendJson(response, 200, draft);
+        logger.info("http_request", { requestId, method, route: "/api/actions/:id/draft", httpStatus: draft === null ? 409 : 200 });
         return;
       }
 
@@ -489,4 +524,11 @@ function validateActionFeedback(value: Record<string, unknown>): ActionFeedbackI
   if (value.owner !== undefined && (typeof value.owner !== "string" || value.owner.length > 200)) throw new Error("Invalid owner");
   if (value.dueDate !== undefined && value.dueDate !== null && (typeof value.dueDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value.dueDate))) throw new Error("Invalid due date");
   return value as ActionFeedbackInput;
+}
+
+function validateResponseTone(value: unknown): ResponseTone {
+  if (value !== "concise" && value !== "neutral" && value !== "warm" && value !== "formal") {
+    throw new Error("Invalid response tone");
+  }
+  return value;
 }

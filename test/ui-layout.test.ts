@@ -23,4 +23,12 @@ test("specification 1.2 separates focused insights from settings configuration",
   assert.match(settings, /id="space-tab-group"[^>]+role="tab"/u);
   assert.match(html, /id="view-toggle"[^>]+aria-controls="settings-view"/u);
   assert.match(html, /specification 1\.2/u);
+  assert.match(settings, /id="connectors-settings"/u);
+  assert.match(settings, /Jira read-only/u);
+
+  const client = await readFile("src/client/app.ts", "utf8");
+  assert.match(client, /Review response draft/u);
+  assert.match(client, /Copy response/u);
+  assert.match(client, /Review recommended action plan/u);
+  assert.doesNotMatch(html, />\s*(?:Send|Post|Reply|Execute)\s*</u);
 });

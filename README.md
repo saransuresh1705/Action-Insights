@@ -4,7 +4,7 @@ Action Insights is a local-first application that reviews selected Webex convers
 
 ## Project status
 
-**Implementation phase — specification 1.2 is approved.**
+**Phase 3 implementation — specification 1.2 is approved.**
 
 The authoritative product and technical specification is [docs/technical-specification.md](docs/technical-specification.md). All product changes must be proposed there, reviewed, and approved before implementation.
 
@@ -23,10 +23,13 @@ The current foundation includes:
 - a constrained OpenAI Responses adapter with structured outputs, evidence grounding, and minimized-storage controls;
 - encrypted per-space summaries and action candidates with locally preserved review feedback;
 - an accessible, focused Insights workspace with configuration isolated under Settings;
-- separate Direct messages and Group spaces selection tabs with selection-safe search and bulk controls; and
-- compact filtering and progressive disclosure for summaries, evidence, and action review.
+- separate Direct messages and Group spaces selection tabs with selection-safe search and bulk controls;
+- compact filtering and progressive disclosure for summaries, evidence, and action review;
+- copy-only response drafts with tone-controlled regeneration and in-session history;
+- structured non-reply recommendations that separate facts, inference, user decisions, and manual side effects; and
+- a bounded Jira-first read-only connector broker with project allow-lists, citation metadata, injection screening, and hard policy denials.
 
-Response drafting, read-only enterprise connectors, deletion reconciliation, and production hardening remain future implementation slices.
+GitHub and Confluence connectors, deletion reconciliation, and production hardening remain future implementation slices.
 
 ## Prerequisites
 
@@ -74,6 +77,16 @@ security add-generic-password -U -a openai -s webex-action-insights -w
 Then open the local app and accept the first-use external-processing disclosure. Until both the Keychain entry and local acknowledgment exist, Webex ingestion continues but model analysis is skipped. Each request is single-space, foreground, and stateless; it sets `store: false`, disables background mode, uses explicit prompt caching without a cache key, supplies no tools, and validates all cited message IDs locally.
 
 Selected message content leaves the device for OpenAI processing and is subject to OpenAI's accepted default API retention. The app does not write model request or response content to logs or any non-local application store.
+
+## Jira read-only connector setup
+
+Phase 3 supports allow-listed Jira issue reads. In the machine-local configuration, set `connectors.jira.enabled` to `true`, set an HTTPS `baseUrl`, list the permitted project keys in `allowedProjects`, and keep `maxCallsPerAnalysis` between 1 and 10. Store a bearer token in the configured Keychain entry using the prompt-based command below:
+
+```sh
+security add-generic-password -U -a jira -s webex-action-insights -w
+```
+
+The token needs read access only. The broker recognizes referenced issue keys, enforces the project and call limits, retrieves only summary/status/update fields, and stores only normalized encrypted evidence. Jira create, edit, comment, transition, and delete operations are not implemented and are denied by policy.
 
 ## Commands
 

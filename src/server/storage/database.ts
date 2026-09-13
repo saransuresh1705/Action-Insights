@@ -6,9 +6,12 @@ import type {
   ActionCandidateView,
   ActionCategory,
   ActionFeedbackInput,
+  ActionRecommendationView,
   ActionStatus,
   ConfidenceLevel,
+  ConnectorEvidenceView,
   InsightDashboard,
+  ResponseDraftView,
   SpaceSummaryView,
   WebexSpaceSummary,
 } from "../../shared/contracts.js";
@@ -475,7 +478,7 @@ export class LocalDatabase {
       now,
       id,
     );
-    return this.listInsightAction(id);
+    return this.getInsightAction(id);
   }
 
   public hasAcknowledgement(key: string): boolean {
@@ -505,7 +508,7 @@ export class LocalDatabase {
     return changes;
   }
 
-  private listInsightAction(id: string): ActionCandidateView | null {
+  public getInsightAction(id: string): ActionCandidateView | null {
     const row = this.database.prepare(`
       SELECT ac.*, s.title_encrypted FROM action_candidates ac JOIN spaces s ON s.id = ac.room_id WHERE ac.id = ?
     `).get(id) as unknown as ActionRow | undefined;
@@ -551,12 +554,56 @@ function actionPayload(action: ActionCandidateView): Record<string, unknown> {
     sourceTimestamp: action.sourceTimestamp, sourceSnippet: action.sourceSnippet,
     contextPreview: action.contextPreview, sourceUrl: action.sourceUrl,
     compatibilityWarning: action.compatibilityWarning,
+    responseDraft: action.responseDraft ?? null,
+    recommendation: action.recommendation ?? null,
+    connectorEvidence: action.connectorEvidence,
+    connectorWarnings: action.connectorWarnings,
   };
 }
 
 function stringArrayFromRecord(record: Record<string, unknown>, key: string): readonly string[] {
   const value = record[key];
   return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : [];
+}
+
+function responseDraftFromRecord(value: unknown): ResponseDraftView | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const draft = value as Record<string, unknown>;
+  const tone = draft.tone;
+  if (typeof draft.text !== "string" || typeof draft.generatedAt !== "string"
+    || (tone !== "concise" && tone !== "neutral" && tone !== "warm" && tone !== "formal")) return undefined;
+  return {
+    text: draft.text,
+    tone,
+    clarifyingQuestions: stringArrayFromRecord(draft, "clarifyingQuestions"),
+    generatedAt: draft.generatedAt,
+  };
+}
+
+function recommendationFromRecord(value: unknown): ActionRecommendationView | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const recommendation = value as Record<string, unknown>;
+  return {
+    steps: stringArrayFromRecord(recommendation, "steps"),
+    missingInformation: stringArrayFromRecord(recommendation, "missingInformation"),
+    completionCriteria: stringArrayFromRecord(recommendation, "completionCriteria"),
+    facts: stringArrayFromRecord(recommendation, "facts"),
+    inferences: stringArrayFromRecord(recommendation, "inferences"),
+    userDecisions: stringArrayFromRecord(recommendation, "userDecisions"),
+    sideEffectingActions: stringArrayFromRecord(recommendation, "sideEffectingActions"),
+  };
+}
+
+function connectorEvidenceFromRecord(value: unknown): readonly ConnectorEvidenceView[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry): ConnectorEvidenceView[] => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return [];
+    const evidence = entry as Record<string, unknown>;
+    if (evidence.connector !== "jira" || typeof evidence.id !== "string" || typeof evidence.itemId !== "string"
+      || typeof evidence.title !== "string" || typeof evidence.status !== "string" || typeof evidence.url !== "string"
+      || typeof evidence.retrievedAt !== "string" || typeof evidence.stale !== "boolean") return [];
+    return [evidence as unknown as ConnectorEvidenceView];
+  });
 }
 
 function summaryView(row: SummaryRow, key: Buffer): SpaceSummaryView {
@@ -578,6 +625,8 @@ function summaryView(row: SummaryRow, key: Buffer): SpaceSummaryView {
 function actionView(row: ActionRow, key: Buffer, collectionNames: readonly string[]): ActionCandidateView {
   const payload = parseRecord(decryptText(row.payload_encrypted, key, `actions:${row.id}:payload`));
   const text = (name: string): string => typeof payload[name] === "string" ? payload[name] as string : "";
+  const responseDraft = responseDraftFromRecord(payload.responseDraft);
+  const recommendation = recommendationFromRecord(payload.recommendation);
   return {
     id: row.id, roomId: row.room_id,
     spaceTitle: decryptText(row.title_encrypted, key, `spaces:${row.room_id}:title`), collectionNames,
@@ -591,6 +640,10 @@ function actionView(row: ActionRow, key: Buffer, collectionNames: readonly strin
     sourceMessageId: row.source_message_id, sourceAuthor: text("sourceAuthor"), sourceTimestamp: text("sourceTimestamp"),
     sourceSnippet: text("sourceSnippet"), sourceUrl: text("sourceUrl"), compatibilityWarning: text("compatibilityWarning"),
     contextPreview: text("contextPreview"), evidenceMessageIds: parseStringArray(row.evidence_ids_json),
+    ...(responseDraft === undefined ? {} : { responseDraft }),
+    ...(recommendation === undefined ? {} : { recommendation }),
+    connectorEvidence: connectorEvidenceFromRecord(payload.connectorEvidence),
+    connectorWarnings: stringArrayFromRecord(payload, "connectorWarnings"),
     modelName: row.model_name, analyzedAt: row.analyzed_at, stale: row.stale === 1,
   };
 }

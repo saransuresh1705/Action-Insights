@@ -2,10 +2,14 @@ import type {
   ActionFeedbackInput,
   AnalysisReadiness,
   InsightDashboard,
+  ResponseDraftView,
+  ResponseTone,
 } from "../../shared/contracts.js";
 import type { AppConfiguration } from "../config.js";
 import type { SecretStore } from "../secrets.js";
 import type { LocalDatabase } from "../storage/database.js";
+import type { ConnectorEvidenceProvider } from "../connectors/types.js";
+import { evaluateOperation } from "../policy.js";
 import { groundAnalysis } from "./grounding.js";
 import { OpenAIResponsesModelAdapter } from "./openai.js";
 import type { ModelAdapter, SpaceAnalysisInput } from "./types.js";
@@ -30,6 +34,7 @@ export class AnalysisService {
     private readonly currentUser: CurrentUserProvider,
     private readonly createAdapter: ModelAdapterFactory = (apiKey) =>
       new OpenAIResponsesModelAdapter(configuration, apiKey),
+    private readonly connectorEvidence?: ConnectorEvidenceProvider,
   ) {}
 
   public async readiness(): Promise<AnalysisReadiness> {
@@ -56,6 +61,25 @@ export class AnalysisService {
     return this.database.updateActionFeedback(id, input);
   }
 
+  public async generateDraft(id: string, tone: ResponseTone, signal?: AbortSignal): Promise<ResponseDraftView | null> {
+    if (!evaluateOperation("DRAFT").allowed) return null;
+    if (!this.database.hasAcknowledgement(RETENTION_ACKNOWLEDGEMENT)) return null;
+    const apiKey = await this.secrets.get(this.configuration.model.credentialRef);
+    if (apiKey === null) return null;
+    const action = this.database.getInsightAction(id);
+    if (action === null || (action.category !== "Reply required" && action.category !== "Acknowledgement")) return null;
+    const adapter = this.createAdapter(apiKey);
+    const draft = await adapter.generateDraft({
+      tone,
+      category: action.category,
+      sourceSnippet: action.sourceSnippet,
+      contextPreview: action.contextPreview,
+      rationale: action.rationale,
+      clarifyingQuestions: action.responseDraft?.clarifyingQuestions ?? [],
+    }, signal);
+    return { ...draft, generatedAt: new Date().toISOString() };
+  }
+
   public async analyze(roomId: string, signal?: AbortSignal): Promise<"analyzed" | "skipped"> {
     if (!this.database.hasAcknowledgement(RETENTION_ACKNOWLEDGEMENT)) return "skipped";
     const apiKey = await this.secrets.get(this.configuration.model.credentialRef);
@@ -73,6 +97,8 @@ export class AnalysisService {
         periodStart: since,
         periodEnd: now,
         coverage: context.coverage,
+        connectorEvidence: [],
+        connectorWarnings: [],
       };
       const empty = groundAnalysis(emptyInput, context.spaceTitle, {
         summary: {
@@ -87,6 +113,8 @@ export class AnalysisService {
     }
     this.userId ??= await this.currentUser.getCurrentUserId();
     const bounded = boundMessages(context.messages);
+    const connectorResult = await this.connectorEvidence?.collect(bounded.messages, signal)
+      ?? { evidence: [], warnings: [] };
     const input: SpaceAnalysisInput = {
       roomId,
       spaceType: context.spaceType,
@@ -95,6 +123,8 @@ export class AnalysisService {
       periodStart: bounded.messages[0]?.created ?? since,
       periodEnd: bounded.messages.at(-1)?.created ?? new Date().toISOString(),
       coverage: context.coverage === "partial" || bounded.truncated ? "partial" : "complete",
+      connectorEvidence: connectorResult.evidence,
+      connectorWarnings: connectorResult.warnings,
     };
     this.database.markInsightsStale(roomId);
     const adapter = this.createAdapter(apiKey);
