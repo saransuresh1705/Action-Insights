@@ -102,6 +102,21 @@
           <button id="refresh-spaces" class="button-secondary" type="button" disabled>Refresh spaces</button>
         </div>
         <p class="muted">Direct and group spaces are discovered read-only. Nothing is selected or scanned automatically.</p>
+        <form id="catalog-activity-form" class="catalog-filter">
+          <div>
+            <label for="catalog-activity-window">Show spaces active within</label>
+            <select id="catalog-activity-window" name="activityWindow">
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="60">60 days</option>
+              <option value="90">90 days</option>
+              <option value="365">365 days</option>
+              <option value="all">All activity</option>
+            </select>
+          </div>
+          <button id="save-catalog-activity-window" type="submit">Apply</button>
+          <p id="catalog-filter-help" class="muted">The default catalog includes spaces active within the last 30 days.</p>
+        </form>
         <div class="collection-controls" aria-labelledby="collections-title">
           <div>
             <label id="collections-title" for="collection-select">Watched Collection</label>
@@ -125,7 +140,7 @@
     </main>
 
     <footer>
-      <p>Read-only decision support · specification 1.0</p>
+      <p>Read-only decision support · specification 1.1</p>
     </footer>
   </body>
 </html>

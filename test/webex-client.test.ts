@@ -35,3 +35,36 @@ test("lists large space catalogs using stable ID pagination and sorts locally by
   assert.deepEqual(spaces.map((space) => space.id), ["room-newer", "room-older", "room-no-activity"]);
   assert.ok(spaces.every((space) => space.selected === false));
 });
+
+test("enumerates more than 3000 spaces without duplicates or omissions", async () => {
+  let pageIndex = 0;
+  const sizes = [1_000, 1_000, 1_000, 5];
+  const fetchMock: typeof fetch = async () => {
+    const size = sizes[pageIndex] ?? 0;
+    const offset = sizes.slice(0, pageIndex).reduce((total, value) => total + value, 0);
+    const items = Array.from({ length: size }, (_, index) => {
+      const number = String(offset + index).padStart(4, "0");
+      return {
+        id: `room-${number}`,
+        title: `Space ${number}`,
+        type: index % 2 === 0 ? "group" : "direct",
+        lastActivity: "2026-09-12T00:00:00.000Z",
+      };
+    });
+    pageIndex += 1;
+    return pageIndex < sizes.length
+      ? Response.json(
+        { items },
+        { headers: { Link: `<https://webexapis.com/v1/rooms?cursor=page-${pageIndex}>; rel="next"` } },
+      )
+      : Response.json({ items });
+  };
+  const client = new WebexReadOnlyClient(new WebexReadOnlyHttpClient({ fetch: fetchMock }));
+
+  const spaces = await client.listSpaces("token");
+
+  assert.equal(pageIndex, 4);
+  assert.equal(spaces.length, 3_005);
+  assert.equal(new Set(spaces.map((space) => space.id)).size, 3_005);
+  assert.equal(spaces.some((space) => space.id === "room-3004"), true);
+});

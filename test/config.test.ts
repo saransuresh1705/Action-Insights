@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
-import { DEFAULT_CONFIGURATION, publicConfiguration, validateConfiguration } from "../src/server/config.js";
+import { ConfigurationStore, DEFAULT_CONFIGURATION, publicConfiguration, validateConfiguration } from "../src/server/config.js";
 
 function configurationFixture(): unknown {
   return structuredClone(DEFAULT_CONFIGURATION);
@@ -14,6 +17,34 @@ test("accepts the approved default configuration", () => {
   assert.equal(configuration.model.store, false);
   assert.equal(configuration.retention.rawMessageDays, 30);
   assert.equal(configuration.retention.derivedInsightDays, 90);
+  assert.equal(configuration.webex.catalogActivityWindowDays, 30);
+});
+
+test("migrates a missing catalog activity window to 30 days and accepts explicit all activity", () => {
+  const fixture = configurationFixture() as { webex: Record<string, unknown> };
+  delete fixture.webex.catalogActivityWindowDays;
+  assert.equal(validateConfiguration(fixture).webex.catalogActivityWindowDays, 30);
+
+  fixture.webex.catalogActivityWindowDays = null;
+  assert.equal(validateConfiguration(fixture).webex.catalogActivityWindowDays, null);
+  fixture.webex.catalogActivityWindowDays = 0;
+  assert.throws(() => validateConfiguration(fixture), /between 1 and 3650/);
+});
+
+test("persists catalog activity settings atomically in the non-secret local configuration", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "action-insights-config-"));
+  context.after(async () => await rm(directory, { recursive: true, force: true }));
+  const path = join(directory, "config.json");
+  const store = new ConfigurationStore(path, DEFAULT_CONFIGURATION);
+
+  const updated = await store.setCatalogActivityWindowDays(null);
+
+  assert.equal(updated.webex.catalogActivityWindowDays, null);
+  assert.equal(store.current().webex.catalogActivityWindowDays, null);
+  const persisted = JSON.parse(await readFile(path, "utf8")) as { webex: Record<string, unknown>; model: Record<string, unknown> };
+  assert.equal(persisted.webex.catalogActivityWindowDays, null);
+  assert.equal(persisted.model.credentialRef, DEFAULT_CONFIGURATION.model.credentialRef);
+  assert.equal((await stat(path)).mode & 0o777, 0o600);
 });
 
 test("rejects a non-loopback bind host", () => {
@@ -62,4 +93,5 @@ test("public configuration cannot expose credential references", () => {
   assert.equal(publicView.externalWritesEnabled, false);
   assert.equal(publicView.backgroundServiceEnabled, false);
   assert.equal(publicView.directMessagesIncluded, true);
+  assert.equal(publicView.catalogActivityWindowDays, 30);
 });

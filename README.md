@@ -4,7 +4,7 @@ Action Insights is a local-first application that reviews selected Webex convers
 
 ## Project status
 
-**Implementation phase — specification 1.0 is approved.**
+**Implementation phase — specification 1.1 is approved.**
 
 The authoritative product and technical specification is [docs/technical-specification.md](docs/technical-specification.md). All product changes must be proposed there, reviewed, and approved before implementation.
 
@@ -17,6 +17,7 @@ The current foundation includes:
 - structured, allow-listed logging that excludes message and identity content;
 - Webex OAuth with exact state validation and server-only token refresh;
 - GET-only space and message adapters with safe pagination and rate-limit handling;
+- a configurable 30-day recent-activity catalog filter that preserves selected older spaces;
 - encrypted SQLite storage for message text and sensitive display names;
 - app-local Watched Collections and manual incremental scans; and
 - an accessible local dashboard for connection, discovery, selection, and scan progress.

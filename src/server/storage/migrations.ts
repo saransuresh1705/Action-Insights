@@ -55,6 +55,13 @@ export const STORAGE_MIGRATIONS: readonly Migration[] = [
       CREATE INDEX message_refs_room_created ON message_refs(room_id, created_at);
     `,
   },
+  {
+    version: 2,
+    sql: `
+      ALTER TABLE spaces ADD COLUMN activity_window_status TEXT NOT NULL DEFAULT 'within-window'
+        CHECK(activity_window_status IN ('within-window', 'outside-window', 'unknown'));
+    `,
+  },
 ];
 
 export function applyStorageMigrations(database: DatabaseSync): void {

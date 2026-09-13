@@ -35,6 +35,7 @@ interface SpaceRow {
   readonly last_activity: string | null;
   readonly access_status: "active" | "unavailable";
   readonly selected: number;
+  readonly activity_window_status: "within-window" | "outside-window" | "unknown";
 }
 
 interface CollectionRow {
@@ -82,12 +83,16 @@ export class LocalDatabase {
 
   public upsertSpaces(spaces: readonly WebexSpaceSummary[], retrievedAt: string): void {
     const statement = this.database.prepare(`
-      INSERT INTO spaces (id, title_encrypted, type, last_activity, access_status, selected, discovered_at, updated_at)
-      VALUES (?, ?, ?, ?, 'active', COALESCE((SELECT selected FROM spaces WHERE id = ?), 0), ?, ?)
+      INSERT INTO spaces (
+        id, title_encrypted, type, last_activity, activity_window_status,
+        access_status, selected, discovered_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, 'active', COALESCE((SELECT selected FROM spaces WHERE id = ?), 0), ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         title_encrypted = excluded.title_encrypted,
         type = excluded.type,
         last_activity = excluded.last_activity,
+        activity_window_status = excluded.activity_window_status,
         access_status = 'active',
         updated_at = excluded.updated_at
     `);
@@ -98,6 +103,7 @@ export class LocalDatabase {
           encryptText(space.title, this.encryptionKey, `spaces:${space.id}:title`),
           space.type,
           space.lastActivity ?? null,
+          space.activityWindowStatus ?? "within-window",
           space.id,
           retrievedAt,
           retrievedAt,
@@ -108,7 +114,7 @@ export class LocalDatabase {
 
   public listSpaces(): readonly StoredSpace[] {
     const rows = this.database.prepare(`
-      SELECT id, title_encrypted, type, last_activity, access_status, selected
+      SELECT id, title_encrypted, type, last_activity, access_status, selected, activity_window_status
       FROM spaces ORDER BY COALESCE(last_activity, '') DESC, id
     `).all() as unknown as SpaceRow[];
     return rows.map((row) => ({
@@ -117,6 +123,7 @@ export class LocalDatabase {
       type: row.type,
       ...(row.last_activity === null ? {} : { lastActivity: row.last_activity }),
       selected: row.selected === 1,
+      activityWindowStatus: row.activity_window_status,
       accessStatus: row.access_status,
     }));
   }

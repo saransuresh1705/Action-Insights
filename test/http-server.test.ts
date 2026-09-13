@@ -89,7 +89,15 @@ test("protects Webex actions with the local session and explicit action header",
     async beginAuthorization() { return "https://webexapis.com/v1/authorize?state=safe"; },
     async completeAuthorization(code, state) { authorizationCompleted = code === "code-canary" && state === "state-canary"; },
     async status() { return { configured: true, connected: false, tokenHealth: "disconnected", grantedScopes: [] }; },
-    async listSpaces() { return { spaces: [], retrievedAt: "2026-09-12T00:00:00.000Z" }; },
+    async listSpaces() {
+      return {
+        spaces: [],
+        retrievedAt: "2026-09-12T00:00:00.000Z",
+        activityWindowDays: 30,
+        totalSpaces: 0,
+        excludedSpaces: 0,
+      };
+    },
     async disconnect() {},
   };
   const logLines: string[] = [];
@@ -150,4 +158,51 @@ test("protects Webex actions with the local session and explicit action header",
   });
   assert.equal(saveSpaces.status, 200);
   assert.deepEqual(((await saveSpaces.json()) as { spaceIds: string[] }).spaceIds, ["room-1"]);
+});
+
+test("updates the catalog activity window through the protected local configuration API", async (context) => {
+  let current = structuredClone(DEFAULT_CONFIGURATION);
+  const configurationStore = {
+    current() { return current; },
+    async setCatalogActivityWindowDays(value: unknown) {
+      current = {
+        ...current,
+        webex: { ...current.webex, catalogActivityWindowDays: value as number | null },
+      };
+      return current;
+    },
+  };
+  const server = createApplicationServer(DEFAULT_CONFIGURATION, {
+    publicDirectory: resolve(process.cwd(), "public"),
+    sessionToken: "configuration-session-token",
+    configurationStore,
+    logger: new SafeLogger(() => undefined),
+  });
+  context.after(() => server.close());
+  await new Promise<void>((resolveListening, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolveListening);
+  });
+  const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const headers = {
+    Cookie: "action_insights_session=configuration-session-token",
+    "X-Action-Insights-Request": "1",
+    "Content-Type": "application/json",
+  };
+
+  const update = await fetch(`${baseUrl}/api/configuration/catalog-activity-window`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ activityWindowDays: null }),
+  });
+  assert.equal(update.status, 200);
+  assert.equal(((await update.json()) as { catalogActivityWindowDays: number | null }).catalogActivityWindowDays, null);
+
+  const invalid = await fetch(`${baseUrl}/api/configuration/catalog-activity-window`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ activityWindowDays: 0 }),
+  });
+  assert.equal(invalid.status, 400);
 });

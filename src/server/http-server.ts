@@ -34,6 +34,12 @@ export interface ServerOptions {
   readonly collections?: CollectionFacade;
   readonly scans?: ScanFacade;
   readonly scheduler?: SchedulerFacade;
+  readonly configurationStore?: ConfigurationFacade;
+}
+
+export interface ConfigurationFacade {
+  current(): AppConfiguration;
+  setCatalogActivityWindowDays(value: unknown): Promise<AppConfiguration>;
 }
 
 export interface WebexFacade {
@@ -136,7 +142,26 @@ export function createApplicationServer(configuration: AppConfiguration, options
       }
 
       if (method === "GET" && path === "/api/configuration") {
-        sendJson(response, 200, publicConfiguration(configuration));
+        sendJson(response, 200, publicConfiguration(options.configurationStore?.current() ?? configuration));
+        logger.info("http_request", { requestId, method, route: path, httpStatus: 200 });
+        return;
+      }
+
+      if (method === "POST" && path === "/api/configuration/catalog-activity-window") {
+        if (options.configurationStore === undefined) {
+          sendJson(response, 503, { error: "Configuration service unavailable" } satisfies ApiError);
+          logger.info("http_request", { requestId, method, route: path, httpStatus: 503 });
+          return;
+        }
+        const body = await readJsonBody(request);
+        const value = body.activityWindowDays;
+        if (value !== null && (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 3_650)) {
+          sendJson(response, 400, { error: "Activity window must be 1 to 3650 days, or null for all activity" } satisfies ApiError);
+          logger.info("http_request", { requestId, method, route: path, httpStatus: 400 });
+          return;
+        }
+        const updated = await options.configurationStore.setCatalogActivityWindowDays(value);
+        sendJson(response, 200, publicConfiguration(updated));
         logger.info("http_request", { requestId, method, route: path, httpStatus: 200 });
         return;
       }

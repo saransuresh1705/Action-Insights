@@ -1,7 +1,9 @@
 import type {
   WebexConnectionStatus,
+  WebexSpaceSummary,
   WebexSpaceCatalog,
 } from "../../shared/contracts.js";
+import type { ConfigurationStore } from "../config.js";
 import type { WebexReadOnlyClient } from "./client.js";
 import type { WebexOAuthService } from "./oauth.js";
 import type { LocalDatabase } from "../storage/database.js";
@@ -11,6 +13,8 @@ export class WebexService {
     private readonly oauth: WebexOAuthService,
     private readonly client: WebexReadOnlyClient,
     private readonly database?: LocalDatabase,
+    private readonly configurationStore?: Pick<ConfigurationStore, "current">,
+    private readonly now: () => Date = () => new Date(),
   ) {}
 
   public async beginAuthorization(): Promise<string> {
@@ -35,13 +39,50 @@ export class WebexService {
 
   public async listSpaces(): Promise<WebexSpaceCatalog> {
     const accessToken = await this.oauth.getValidAccessToken();
-    const spaces = await this.client.listSpaces(accessToken);
-    const retrievedAt = new Date().toISOString();
-    this.database?.upsertSpaces(spaces, retrievedAt);
-    return { spaces, retrievedAt };
+    const discoveredSpaces = await this.client.listSpaces(accessToken);
+    const selectedIds = new Set(this.database?.selectedSpaceIds() ?? []);
+    const activityWindowDays = this.configurationStore?.current().webex.catalogActivityWindowDays ?? 30;
+    const retrievedAt = this.now();
+    const spaces = filterSpaceCatalog(discoveredSpaces, selectedIds, activityWindowDays, retrievedAt);
+    const retrievedAtText = retrievedAt.toISOString();
+    this.database?.upsertSpaces(spaces, retrievedAtText);
+    return {
+      spaces,
+      retrievedAt: retrievedAtText,
+      activityWindowDays,
+      totalSpaces: discoveredSpaces.length,
+      excludedSpaces: discoveredSpaces.length - spaces.length,
+    };
   }
 
   public async disconnect(): Promise<void> {
     await this.oauth.disconnect();
   }
+}
+
+export function filterSpaceCatalog(
+  spaces: readonly WebexSpaceSummary[],
+  selectedIds: ReadonlySet<string>,
+  activityWindowDays: number | null,
+  now: Date,
+): readonly WebexSpaceSummary[] {
+  const cutoff = activityWindowDays === null ? null : now.getTime() - activityWindowDays * 86_400_000;
+  const filtered: WebexSpaceSummary[] = [];
+
+  for (const space of spaces) {
+    const selected = selectedIds.has(space.id);
+    const lastActivityTime = space.lastActivity === undefined ? Number.NaN : Date.parse(space.lastActivity);
+    const activityKnown = Number.isFinite(lastActivityTime);
+    const withinWindow = cutoff === null || (activityKnown && lastActivityTime >= cutoff);
+    if (!selected && !withinWindow) continue;
+
+    const activityWindowStatus = !activityKnown
+      ? "unknown"
+      : cutoff !== null && !withinWindow
+        ? "outside-window"
+        : "within-window";
+    filtered.push({ ...space, selected, activityWindowStatus });
+  }
+
+  return filtered;
 }

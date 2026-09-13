@@ -21,6 +21,7 @@
   "webex": {
     "oauthClientId": "replace-with-non-secret-client-id",
     "oauthRedirectUri": "http://127.0.0.1:4318/oauth/webex/callback",
+    "catalogActivityWindowDays": 30,
     "scopes": [
       "spark:messages_read",
       "spark:people_read",

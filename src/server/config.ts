@@ -1,6 +1,7 @@
-import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import type { PublicConfiguration, ReasoningEffort } from "../shared/contracts.js";
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
@@ -32,6 +33,7 @@ export interface AppConfiguration {
     readonly oauthRedirectUri: string;
     readonly scopes: readonly string[];
     readonly credentialRef: string;
+    readonly catalogActivityWindowDays: number | null;
   };
   readonly model: {
     readonly provider: "openai";
@@ -67,6 +69,7 @@ export const DEFAULT_CONFIGURATION: AppConfiguration = {
     oauthRedirectUri: "http://127.0.0.1:4318/oauth/webex/callback",
     scopes: WEBEX_READ_SCOPES,
     credentialRef: "os-keychain://webex-action-insights/webex-oauth",
+    catalogActivityWindowDays: 30,
   },
   model: {
     provider: "openai",
@@ -106,6 +109,12 @@ function integerValue(value: unknown, label: string, minimum: number, maximum: n
     throw new Error(`${label} must be an integer between ${minimum} and ${maximum}`);
   }
   return value as number;
+}
+
+function catalogActivityWindowDays(value: unknown): number | null {
+  if (value === undefined) return 30;
+  if (value === null) return null;
+  return integerValue(value, "webex.catalogActivityWindowDays", 1, 3_650);
 }
 
 function stringArray(value: unknown, label: string): readonly string[] {
@@ -156,7 +165,7 @@ export function validateConfiguration(value: unknown): AppConfiguration {
   assertOnlyKeys(scan, ["intervalMinutes", "initialBackfillDays", "overlapMinutes"], "scan");
   assertOnlyKeys(retention, ["rawMessageDays", "derivedInsightDays", "auditMetadataDays"], "retention");
   assertOnlyKeys(storage, ["dataDirectory", "encryptionKeyRef"], "storage");
-  assertOnlyKeys(webex, ["oauthClientId", "oauthRedirectUri", "scopes", "credentialRef"], "webex");
+  assertOnlyKeys(webex, ["oauthClientId", "oauthRedirectUri", "scopes", "credentialRef", "catalogActivityWindowDays"], "webex");
   assertOnlyKeys(model, ["provider", "name", "reasoningEffort", "store", "credentialRef"], "model");
 
   const bindHost = stringValue(app.bindHost, "app.bindHost");
@@ -210,6 +219,7 @@ export function validateConfiguration(value: unknown): AppConfiguration {
       oauthRedirectUri: oauthRedirectUri(webex.oauthRedirectUri, bindHost, port),
       scopes,
       credentialRef: credentialReference(webex.credentialRef, "webex.credentialRef"),
+      catalogActivityWindowDays: catalogActivityWindowDays(webex.catalogActivityWindowDays),
     },
     model: {
       provider: "openai",
@@ -237,6 +247,46 @@ export async function loadConfiguration(path = defaultConfigurationPath()): Prom
   }
 }
 
+export class ConfigurationStore {
+  private configuration: AppConfiguration;
+
+  public constructor(
+    private readonly path: string,
+    configuration: AppConfiguration,
+  ) {
+    this.configuration = configuration;
+  }
+
+  public current(): AppConfiguration {
+    return this.configuration;
+  }
+
+  public async setCatalogActivityWindowDays(value: unknown): Promise<AppConfiguration> {
+    const days = catalogActivityWindowDays(value);
+    const next = validateConfiguration({
+      ...this.configuration,
+      webex: { ...this.configuration.webex, catalogActivityWindowDays: days },
+    });
+    await writeConfigurationAtomically(this.path, next);
+    this.configuration = next;
+    return next;
+  }
+}
+
+async function writeConfigurationAtomically(path: string, configuration: AppConfiguration): Promise<void> {
+  const directory = dirname(path);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const temporaryPath = resolve(directory, `.${basename(path)}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(configuration, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await rename(temporaryPath, path);
+    await chmod(path, 0o600);
+  } catch (error: unknown) {
+    await unlink(temporaryPath).catch(() => undefined);
+    throw error;
+  }
+}
+
 export function publicConfiguration(configuration: AppConfiguration): PublicConfiguration {
   return {
     timezone: configuration.app.timezone,
@@ -247,6 +297,7 @@ export function publicConfiguration(configuration: AppConfiguration): PublicConf
     modelName: configuration.model.name,
     modelEnabled: false,
     directMessagesIncluded: true,
+    catalogActivityWindowDays: configuration.webex.catalogActivityWindowDays,
     backgroundServiceEnabled: false,
     externalWritesEnabled: false,
   };

@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import type { SecretStore } from "../src/server/secrets.js";
 import { decryptText, encryptText, LocalDataKeyProvider } from "../src/server/storage/crypto.js";
 import { LocalDatabase } from "../src/server/storage/database.js";
+import { applyStorageMigrations, STORAGE_MIGRATIONS } from "../src/server/storage/migrations.js";
 
 class MemorySecretStore implements SecretStore {
   public value: string | null = null;
@@ -23,6 +25,19 @@ test("encrypts local text with authenticated context", () => {
   assert.throws(() => decryptText(encrypted, key, "space:two:title"));
 });
 
+test("migrates existing space rows with a safe activity-window status", () => {
+  const database = new DatabaseSync(":memory:");
+  database.exec(STORAGE_MIGRATIONS[0]?.sql ?? "");
+  database.exec("PRAGMA user_version = 1");
+
+  applyStorageMigrations(database);
+
+  const columns = database.prepare("PRAGMA table_info(spaces)").all() as Array<{ name: string }>;
+  assert.equal(columns.some((column) => column.name === "activity_window_status"), true);
+  assert.equal((database.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, 2);
+  database.close();
+});
+
 test("persists spaces, collections, messages, and cursors without plaintext content", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "action-insights-store-"));
   context.after(async () => await rm(directory, { recursive: true, force: true }));
@@ -35,6 +50,7 @@ test("persists spaces, collections, messages, and cursors without plaintext cont
     type: "direct",
     lastActivity: "2026-09-12T10:00:00.000Z",
     selected: false,
+    activityWindowStatus: "within-window",
   }], "2026-09-12T10:01:00.000Z");
   database.createCollection("collection-1", "CANARY_PRIVATE_COLLECTION", "Sensitive description");
   database.replaceCollectionSpaces("collection-1", ["room-1"]);
@@ -50,6 +66,7 @@ test("persists spaces, collections, messages, and cursors without plaintext cont
   }], "2026-09-12T10:00:00.000Z", "complete");
 
   assert.equal(database.listSpaces()[0]?.title, "CANARY_PRIVATE_SPACE_TITLE");
+  assert.equal(database.listSpaces()[0]?.activityWindowStatus, "within-window");
   assert.deepEqual(database.selectedSpaceIds(), ["room-1"]);
   assert.equal(database.listCollections()[0]?.name, "CANARY_PRIVATE_COLLECTION");
   assert.equal(database.getCursor("room-1")?.highWatermark, "2026-09-12T10:00:00.000Z");

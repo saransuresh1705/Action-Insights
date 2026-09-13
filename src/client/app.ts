@@ -17,6 +17,9 @@ const retentionElement = requiredElement("retention-status");
 const connectButton = requiredButton("webex-connect");
 const disconnectButton = requiredButton("webex-disconnect");
 const refreshSpacesButton = requiredButton("refresh-spaces");
+const activityWindowForm = requiredForm("catalog-activity-form");
+const activityWindowSelect = requiredSelect("catalog-activity-window");
+const saveActivityWindowButton = requiredButton("save-catalog-activity-window");
 const collectionSelect = requiredSelect("collection-select");
 const saveCollectionSpacesButton = requiredButton("save-collection-spaces");
 const collectionForm = requiredForm("collection-form");
@@ -27,6 +30,10 @@ let currentCollections: WatchedCollectionView[] = [];
 connectButton.addEventListener("click", () => void startWebexAuthorization());
 disconnectButton.addEventListener("click", () => void disconnectWebex());
 refreshSpacesButton.addEventListener("click", () => void loadSpaces());
+activityWindowForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void saveCatalogActivityWindow();
+});
 collectionSelect.addEventListener("change", renderSpaces);
 saveCollectionSpacesButton.addEventListener("click", () => void saveCollectionSpaces());
 collectionForm.addEventListener("submit", (event) => {
@@ -54,6 +61,7 @@ async function loadDashboard(): Promise<void> {
       ? `Every ${configuration.scanIntervalMinutes} minutes · app-open only`
       : `Next ${new Date(scheduler.nextRunAt).toLocaleString()} · app-open only`;
     retentionElement.textContent = `${configuration.rawMessageRetentionDays} days raw · ${configuration.derivedInsightRetentionDays} days insights`;
+    setActivityWindowSelect(configuration.catalogActivityWindowDays);
 
     requiredElement("guardrail-status").textContent = configuration.externalWritesEnabled
       ? "Configuration error"
@@ -123,16 +131,46 @@ async function loadSpaces(): Promise<void> {
   try {
     const catalog = await fetchJson<WebexSpaceCatalog>("/api/webex/spaces");
     currentSpaces = catalog.spaces;
+    requiredElement("catalog-filter-help").textContent = catalog.activityWindowDays === null
+      ? `Showing all ${catalog.totalSpaces} accessible spaces. Previously selected spaces remain selected.`
+      : `Showing ${catalog.spaces.length} of ${catalog.totalSpaces} accessible spaces with activity in the last ${catalog.activityWindowDays} days, plus any selected older spaces.`;
     if (catalog.spaces.length === 0) {
-      list.replaceChildren(paragraph("No accessible spaces were returned by Webex."));
+      list.replaceChildren(paragraph("No spaces match the current activity window."));
     } else {
       renderSpaces();
     }
   } catch {
-    list.replaceChildren(paragraph("Spaces could not be loaded. Reconnect Webex and try again."));
+    list.replaceChildren(paragraph("Spaces could not be loaded. Retry the catalog refresh; reconnect only if the account status shows an error."));
   } finally {
     refreshSpacesButton.disabled = false;
   }
+}
+
+async function saveCatalogActivityWindow(): Promise<void> {
+  const activityWindowDays = activityWindowSelect.value === "all" ? null : Number(activityWindowSelect.value);
+  saveActivityWindowButton.disabled = true;
+  try {
+    const configuration = await postJson<PublicConfiguration>("/api/configuration/catalog-activity-window", {
+      activityWindowDays,
+    });
+    setActivityWindowSelect(configuration.catalogActivityWindowDays);
+    setWebexHelp(configuration.catalogActivityWindowDays === null
+      ? "The space catalog now includes all activity."
+      : `The space catalog now shows activity from the last ${configuration.catalogActivityWindowDays} days.`);
+    if (!refreshSpacesButton.disabled) await loadSpaces();
+  } catch {
+    setWebexHelp("The catalog activity window could not be saved.");
+  } finally {
+    saveActivityWindowButton.disabled = false;
+  }
+}
+
+function setActivityWindowSelect(days: number | null): void {
+  const value = days === null ? "all" : String(days);
+  if (![...activityWindowSelect.options].some((option) => option.value === value)) {
+    activityWindowSelect.append(new Option(`${days} days`, value));
+  }
+  activityWindowSelect.value = value;
 }
 
 async function loadCollections(selectedId?: string): Promise<void> {
@@ -240,7 +278,13 @@ function spaceCard(space: WebexSpaceCatalog["spaces"][number], checked: boolean)
   const title = document.createElement("h3");
   title.textContent = space.title;
   const details = document.createElement("p");
-  details.textContent = `${space.type === "direct" ? "Direct message" : "Group space"}${space.lastActivity === undefined ? "" : ` · active ${new Date(space.lastActivity).toLocaleString()}`}`;
+  const activity = space.lastActivity === undefined
+    ? "Activity unknown"
+    : `active ${new Date(space.lastActivity).toLocaleString()}`;
+  const windowStatus = space.activityWindowStatus === "outside-window"
+    ? " · Outside activity window"
+    : "";
+  details.textContent = `${space.type === "direct" ? "Direct message" : "Group space"} · ${activity}${windowStatus}`;
   content.append(title, details);
   article.append(checkbox, content);
   return article;

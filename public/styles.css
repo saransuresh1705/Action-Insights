@@ -167,6 +167,21 @@ section { margin-top: 2.5rem; }
   gap: 0.75rem;
   margin-top: 1rem;
 }
+.catalog-filter {
+  display: grid;
+  grid-template-columns: minmax(14rem, 20rem) auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: end;
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--surface);
+}
+.catalog-filter label { display: block; margin-bottom: 0.4rem; color: var(--muted); font-size: 0.8rem; font-weight: 700; }
+.catalog-filter select { width: 100%; padding: 0.7rem; border: 1px solid var(--line); border-radius: 0.55rem; background: var(--surface); color: var(--ink); }
+.catalog-filter button { padding: 0.7rem 1rem; border: 0; border-radius: 0.55rem; color: white; background: var(--brand); font-weight: 750; }
+.catalog-filter p { margin: 0 0 0.65rem; }
 .collection-controls {
   display: grid;
   grid-template-columns: 1fr 1fr auto;
@@ -196,6 +211,8 @@ footer { padding-block: 3rem 2rem; color: var(--muted); font-size: 0.78rem; }
   .hero .muted { grid-column: 1; }
   .connection-panel { grid-template-columns: 1fr; }
   .notice { grid-column: 1; }
+  .catalog-filter { grid-template-columns: 1fr; }
+  .catalog-filter p { margin-bottom: 0; }
   .collection-controls { grid-template-columns: 1fr; }
 }
 

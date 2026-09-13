@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 1.1-draft |
-| Status | **Pending approval — specification 1.0 remains the approved implementation baseline** |
+| Document version | 1.1 |
+| Status | **Approved for implementation** |
 | Date | 13 September 2026 |
 | Intended deployment | Single-user, local-first application |
 | Primary user | The authenticated Webex user |
@@ -506,7 +506,7 @@ connectors:
 
 The checked-in repository may contain a `.example` file with placeholders only.
 
-When specification 1.1 is approved and implemented, a configuration that omits `webex.catalog_activity_window_days` shall migrate to the default value of 30. Existing Watched Collection membership and selected-space scan scope shall be preserved. Non-selected catalog metadata outside the window need not be newly persisted and may be removed during catalog reconciliation; this migration shall not delete retained messages or derived insights before their independently configured retention deadlines.
+When upgrading to the specification 1.1 implementation, a configuration that omits `webex.catalog_activity_window_days` shall migrate to the default value of 30. Existing Watched Collection membership and selected-space scan scope shall be preserved. Non-selected catalog metadata outside the window need not be newly persisted and may be removed during catalog reconciliation; this migration shall not delete retained messages or derived insights before their independently configured retention deadlines.
 
 ### 10.2 Secrets
 
@@ -854,7 +854,7 @@ Suggested approval record:
 | 0.9-draft | Default OpenAI retention accepted | User | 12 September 2026 | D-06 revised: OpenAI's default API abuse-monitoring retention is accepted. Formal Cisco authorization and ZDR verification removed as application gates; minimized-storage request controls remain mandatory. Overall spec remains unapproved. |
 | 1.0-rc1 | Final approval candidate | User | 12 September 2026 | Release thresholds approved. A validated 64-case synthetic corpus was created at `evaluation/corpus.v1.jsonl`. Final specification approval remains pending. |
 | 1.0 | Approved for implementation | User | 12 September 2026 | The user explicitly approved specification 1.0 for implementation and authorized publishing the specification and local commits to the public `saransuresh1705/Action-Insights` repository. |
-| 1.1-draft | Pending approval | — | 13 September 2026 | Adds a configurable 30-day space-catalog activity window, stable full-catalog enumeration followed by local filtering, preservation of selected inactive spaces, migration behavior, and large-account acceptance tests. Specification 1.0 remains the approved implementation baseline until this revision is explicitly approved. |
+| 1.1 | Approved for implementation | User | 13 September 2026 | The user approved the configurable 30-day space-catalog activity window, stable full-catalog enumeration followed by local filtering, preservation of selected inactive spaces, migration behavior, and large-account acceptance tests for Phase 1 implementation. |
 
 ## 19. Decision register
 
@@ -874,7 +874,7 @@ Suggested approval record:
 | D-12 | Should file attachments ever be analyzed? | **Approved by the user on 12 September 2026:** no attachment-content analysis in release 1. |
 | D-13 | Which repository is canonical for specification and application code? | **Approved by the user on 12 September 2026:** `https://github.com/saransuresh1705/Action-Insights`. |
 | D-14 | How shall OAuth tokens, client secrets, API keys, and connector secrets be stored? | **Approved by the user on 12 September 2026:** OS credential store; local configuration contains references only. Plaintext secret files are excluded. |
-| D-15 | Should the selectable Webex space catalog be restricted by recent activity? | **Proposed by the user on 13 September 2026; pending specification 1.1 approval:** default to spaces active within the previous 30 days, make the window configurable, enumerate via stable room-ID pagination and filter locally, and preserve already-selected spaces outside the window. |
+| D-15 | Should the selectable Webex space catalog be restricted by recent activity? | **Approved by the user on 13 September 2026:** default to spaces active within the previous 30 days, make the window configurable, enumerate via stable room-ID pagination and filter locally, and preserve already-selected spaces outside the window. |
 
 ## 20. Risks and mitigations
 
@@ -923,4 +923,4 @@ The specification is ready for implementation approval only when:
 - Release-1 acceptance thresholds are approved and the synthetic evaluation corpus exists, validates against its documented schema, and contains the required scenario coverage.
 - The approval table identifies a final version and approver.
 
-All conditions above are satisfied for specification 1.0. The user approved that version for implementation on 12 September 2026. Specification 1.1-draft introduces the catalog activity-window change requested on 13 September 2026 and is not approved for implementation until the user explicitly approves that exact revision under §18.
+All conditions above are satisfied for specification 1.1. The user approved this version for implementation on 13 September 2026.

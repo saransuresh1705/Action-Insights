@@ -1,5 +1,5 @@
 export const APP_NAME = "Webex Action Insights";
-export const APP_VERSION = "0.2.0";
+export const APP_VERSION = "0.3.0";
 
 export type ReasoningEffort = "medium" | "high";
 
@@ -12,6 +12,7 @@ export interface PublicConfiguration {
   readonly modelName: string;
   readonly modelEnabled: boolean;
   readonly directMessagesIncluded: boolean;
+  readonly catalogActivityWindowDays: number | null;
   readonly backgroundServiceEnabled: false;
   readonly externalWritesEnabled: false;
 }
@@ -43,11 +44,15 @@ export interface WebexSpaceSummary {
   readonly type: "direct" | "group";
   readonly lastActivity?: string;
   readonly selected: boolean;
+  readonly activityWindowStatus?: "within-window" | "outside-window" | "unknown";
 }
 
 export interface WebexSpaceCatalog {
   readonly spaces: readonly WebexSpaceSummary[];
   readonly retrievedAt: string;
+  readonly activityWindowDays: number | null;
+  readonly totalSpaces: number;
+  readonly excludedSpaces: number;
 }
 
 export interface WatchedCollectionView {
