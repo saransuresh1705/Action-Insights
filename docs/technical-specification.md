@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Working title | Webex Action Insights |
-| Document version | 1.2-draft |
-| Status | **Draft — awaiting user approval** |
+| Document version | 1.2 |
+| Status | **Approved for implementation** |
 | Date | 13 September 2026 |
 | Intended deployment | Single-user, local-first application |
 | Primary user | The authenticated Webex user |
@@ -888,7 +888,7 @@ Suggested approval record:
 | 1.0-rc1 | Final approval candidate | User | 12 September 2026 | Release thresholds approved. A validated 64-case synthetic corpus was created at `evaluation/corpus.v1.jsonl`. Final specification approval remains pending. |
 | 1.0 | Approved for implementation | User | 12 September 2026 | The user explicitly approved specification 1.0 for implementation and authorized publishing the specification and local commits to the public `saransuresh1705/Action-Insights` repository. |
 | 1.1 | Approved for implementation | User | 13 September 2026 | The user approved the configurable 30-day space-catalog activity window, stable full-catalog enumeration followed by local filtering, preservation of selected inactive spaces, migration behavior, and large-account acceptance tests for Phase 1 implementation. |
-| 1.2-draft | Awaiting approval | User proposal recorded | 13 September 2026 | Proposes a focused Insights workspace, Settings-only configuration, configuration preview relocation, and separate Direct messages/Group spaces selection tabs, with progressive disclosure and compact filtering refinements. No application code may implement this draft until the user approves version 1.2. |
+| 1.2 | Approved for implementation | User | 13 September 2026 | The user approved the focused Insights workspace, Settings-only configuration, configuration preview relocation, separate Direct messages/Group spaces selection tabs, progressive disclosure, and compact filtering refinements for Phase 2 implementation. |
 
 ## 19. Decision register
 
@@ -909,7 +909,7 @@ Suggested approval record:
 | D-13 | Which repository is canonical for specification and application code? | **Approved by the user on 12 September 2026:** `https://github.com/saransuresh1705/Action-Insights`. |
 | D-14 | How shall OAuth tokens, client secrets, API keys, and connector secrets be stored? | **Approved by the user on 12 September 2026:** OS credential store; local configuration contains references only. Plaintext secret files are excluded. |
 | D-15 | Should the selectable Webex space catalog be restricted by recent activity? | **Approved by the user on 13 September 2026:** default to spaces active within the previous 30 days, make the window configurable, enumerate via stable room-ID pagination and filter locally, and preserve already-selected spaces outside the window. |
-| D-16 | How should configuration and insight information be segregated in the local UI? | **Proposed by the user on 13 September 2026; awaiting approval of specification 1.2:** use Insights and Settings as the only top-level views; keep scanning and results together in Insights; move all configuration and the configuration preview to Settings; use separate Direct messages and Group spaces tabs for selection. |
+| D-16 | How should configuration and insight information be segregated in the local UI? | **Approved by the user on 13 September 2026 in specification 1.2:** use Insights and Settings as the only top-level views; keep scanning and results together in Insights; move all configuration and the configuration preview to Settings; use separate Direct messages and Group spaces tabs for selection. |
 
 ## 20. Risks and mitigations
 
@@ -959,4 +959,4 @@ The specification is ready for implementation approval only when:
 - Release-1 acceptance thresholds are approved and the synthetic evaluation corpus exists, validates against its documented schema, and contains the required scenario coverage.
 - The approval table identifies a final version and approver.
 
-All baseline release conditions are satisfied for specification 1.1, which the user approved for implementation on 13 September 2026. The UI changes in specification 1.2-draft remain unapproved and shall not be implemented until the user explicitly approves version 1.2.
+All release conditions are satisfied for specification 1.2. The user approved this version for Phase 2 implementation on 13 September 2026.
