@@ -21,15 +21,36 @@
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
         <div>
-          <p class="eyebrow">Release 1 foundation</p>
+          <p class="eyebrow">Release 1 · Phase 2</p>
           <h2 id="hero-title">Turn conversations into a reviewable action inbox.</h2>
           <p>
-            This local application will summarize selected spaces, surface evidence-linked actions, and prepare drafts
+            This local application summarizes selected spaces and surfaces evidence-linked actions
             without sending or changing anything on your behalf.
           </p>
         </div>
         <button id="scan-now" type="button" disabled aria-describedby="scan-help">Scan now</button>
         <p id="scan-help" class="muted">Select spaces before running the first scan.</p>
+      </section>
+
+      <section id="model-setup" class="connection-panel" aria-labelledby="model-setup-title">
+        <div>
+          <p class="eyebrow">External model disclosure</p>
+          <h2 id="model-setup-title">Enable conversation analysis</h2>
+          <p id="analysis-readiness">Checking local model configuration…</p>
+          <p class="muted">
+            Selected Webex message content is sent to OpenAI for analysis and may be retained under OpenAI’s default
+            API retention. It is not stored by this app outside this device. Requests disable response storage and tools.
+          </p>
+          <p class="muted">The OpenAI API key must be stored in macOS Keychain as configured; it is never returned to this page.</p>
+        </div>
+        <div>
+          <label class="acknowledgement">
+            <input id="retention-accept" type="checkbox" />
+            I accept external processing and default API retention for selected messages.
+          </label>
+          <button id="retention-confirm" type="button" disabled>Confirm locally</button>
+        </div>
+        <p class="notice"><a id="retention-disclosure-link" href="https://developers.openai.com/api/docs/guides/your-data" target="_blank" rel="noreferrer">Review OpenAI API data controls</a>. This acknowledgment is stored only in the local encrypted app database.</p>
       </section>
 
       <section class="connection-panel" aria-labelledby="connection-title">
@@ -80,10 +101,10 @@
         </div>
       </section>
 
-      <section class="two-column" aria-label="Initial dashboard panels">
+      <section class="two-column" aria-label="Scan and scope panels">
         <article class="panel">
-          <p class="eyebrow">Action inbox</p>
-          <h2>No actions yet</h2>
+          <p class="eyebrow">Scan status</p>
+          <h2>Selected-space analysis</h2>
           <p id="scan-status">Connect Webex and choose Watched Collections to begin.</p>
         </article>
         <article class="panel">
@@ -91,6 +112,28 @@
           <h2>Direct messages</h2>
           <p id="direct-message-status">Loading…</p>
         </article>
+      </section>
+
+      <section aria-labelledby="actions-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Action inbox</p>
+            <h2 id="actions-title">What may need you</h2>
+          </div>
+          <button id="refresh-insights" class="button-secondary" type="button">Refresh insights</button>
+        </div>
+        <p class="muted">Model suggestions require your review. Updating an item changes local feedback only; no Webex or external action is executed.</p>
+        <div id="action-list" class="insight-list" aria-live="polite"><p>No action candidates yet.</p></div>
+      </section>
+
+      <section aria-labelledby="summaries-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Space summaries</p>
+            <h2 id="summaries-title">Conversation briefs</h2>
+          </div>
+        </div>
+        <div id="summary-list" class="summary-grid" aria-live="polite"><p>No summaries yet.</p></div>
       </section>
 
       <section aria-labelledby="spaces-title">

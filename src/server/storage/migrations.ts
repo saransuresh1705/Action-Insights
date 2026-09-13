@@ -62,6 +62,46 @@ export const STORAGE_MIGRATIONS: readonly Migration[] = [
         CHECK(activity_window_status IN ('within-window', 'outside-window', 'unknown'));
     `,
   },
+  {
+    version: 3,
+    sql: `
+      ALTER TABLE message_refs ADD COLUMN mentioned_people_json TEXT NOT NULL DEFAULT '[]';
+      CREATE TABLE space_summaries (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL UNIQUE REFERENCES spaces(id) ON DELETE CASCADE,
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        coverage TEXT NOT NULL CHECK(coverage IN ('complete', 'partial')),
+        payload_encrypted BLOB NOT NULL,
+        evidence_ids_json TEXT NOT NULL,
+        model_name TEXT NOT NULL,
+        analyzed_at TEXT NOT NULL,
+        stale INTEGER NOT NULL CHECK(stale IN (0, 1))
+      ) STRICT;
+      CREATE TABLE action_candidates (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+        model_category TEXT NOT NULL,
+        category TEXT NOT NULL,
+        secondary_category TEXT,
+        status TEXT NOT NULL,
+        confidence_level TEXT NOT NULL,
+        confidence_score REAL NOT NULL,
+        payload_encrypted BLOB NOT NULL,
+        evidence_ids_json TEXT NOT NULL,
+        source_message_id TEXT NOT NULL,
+        model_name TEXT NOT NULL,
+        analyzed_at TEXT NOT NULL,
+        stale INTEGER NOT NULL CHECK(stale IN (0, 1)),
+        user_modified_at TEXT
+      ) STRICT;
+      CREATE INDEX action_candidates_room_status ON action_candidates(room_id, status);
+      CREATE TABLE local_acknowledgements (
+        key TEXT PRIMARY KEY,
+        acknowledged_at TEXT NOT NULL
+      ) STRICT;
+    `,
+  },
 ];
 
 export function applyStorageMigrations(database: DatabaseSync): void {

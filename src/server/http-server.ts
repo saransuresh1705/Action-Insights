@@ -5,8 +5,14 @@ import { extname, join } from "node:path";
 import {
   APP_NAME,
   APP_VERSION,
+  ACTION_CATEGORIES,
+  type ActionFeedbackInput,
+  type ActionCandidateView,
+  type ActionStatus,
+  type AnalysisReadiness,
   type ApiError,
   type HealthResponse,
+  type InsightDashboard,
   type ScanStatus,
   type SchedulerStatus,
   type WatchedCollectionCatalog,
@@ -35,6 +41,7 @@ export interface ServerOptions {
   readonly scans?: ScanFacade;
   readonly scheduler?: SchedulerFacade;
   readonly configurationStore?: ConfigurationFacade;
+  readonly analysis?: AnalysisFacade;
 }
 
 export interface ConfigurationFacade {
@@ -64,6 +71,13 @@ export interface ScanFacade {
 
 export interface SchedulerFacade {
   status(): SchedulerStatus;
+}
+
+export interface AnalysisFacade {
+  readiness(): Promise<AnalysisReadiness>;
+  acknowledgeRetention(): void;
+  list(): InsightDashboard;
+  updateAction(id: string, input: ActionFeedbackInput): ActionCandidateView | null;
 }
 
 export function createApplicationServer(configuration: AppConfiguration, options: ServerOptions): Server {
@@ -144,6 +158,59 @@ export function createApplicationServer(configuration: AppConfiguration, options
       if (method === "GET" && path === "/api/configuration") {
         sendJson(response, 200, publicConfiguration(options.configurationStore?.current() ?? configuration));
         logger.info("http_request", { requestId, method, route: path, httpStatus: 200 });
+        return;
+      }
+
+      if (method === "GET" && path === "/api/analysis/readiness") {
+        if (options.analysis === undefined) {
+          sendJson(response, 503, { error: "Analysis service unavailable" } satisfies ApiError);
+        } else {
+          sendJson(response, 200, await options.analysis.readiness());
+        }
+        logger.info("http_request", { requestId, method, route: path, httpStatus: options.analysis === undefined ? 503 : 200 });
+        return;
+      }
+
+      if (method === "POST" && path === "/api/analysis/acknowledgement") {
+        if (options.analysis === undefined) {
+          sendJson(response, 503, { error: "Analysis service unavailable" } satisfies ApiError);
+          logger.info("http_request", { requestId, method, route: path, httpStatus: 503 });
+          return;
+        }
+        const body = await readJsonBody(request);
+        if (body.accepted !== true) {
+          sendJson(response, 400, { error: "Explicit acceptance is required" } satisfies ApiError);
+          logger.info("http_request", { requestId, method, route: path, httpStatus: 400 });
+          return;
+        }
+        options.analysis.acknowledgeRetention();
+        sendJson(response, 200, await options.analysis.readiness());
+        logger.info("http_request", { requestId, method, route: path, httpStatus: 200 });
+        return;
+      }
+
+      if (method === "GET" && path === "/api/insights") {
+        if (options.analysis === undefined) {
+          sendJson(response, 503, { error: "Analysis service unavailable" } satisfies ApiError);
+        } else {
+          sendJson(response, 200, options.analysis.list());
+        }
+        logger.info("http_request", { requestId, method, route: path, httpStatus: options.analysis === undefined ? 503 : 200 });
+        return;
+      }
+
+      const actionMatch = /^\/api\/actions\/([a-f0-9]{32})$/u.exec(path);
+      if (method === "POST" && actionMatch?.[1] !== undefined) {
+        if (options.analysis === undefined) {
+          sendJson(response, 503, { error: "Analysis service unavailable" } satisfies ApiError);
+          logger.info("http_request", { requestId, method, route: "/api/actions/:id", httpStatus: 503 });
+          return;
+        }
+        const input = validateActionFeedback(await readJsonBody(request));
+        const updated = options.analysis.updateAction(actionMatch[1], input);
+        if (updated === null) sendJson(response, 404, { error: "Action not found" } satisfies ApiError);
+        else sendJson(response, 200, updated);
+        logger.info("http_request", { requestId, method, route: "/api/actions/:id", httpStatus: updated === null ? 404 : 200 });
         return;
       }
 
@@ -410,4 +477,16 @@ function applySecurityHeaders(response: ServerResponse): void {
 
 function normalizedRoute(path: string): string {
   return path.startsWith("/api/") ? "/api/unknown" : "/unknown";
+}
+
+function validateActionFeedback(value: Record<string, unknown>): ActionFeedbackInput {
+  const allowed = new Set(["status", "category", "owner", "dueDate", "confidence"]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) throw new Error("Unsupported action feedback field");
+  const statuses: readonly ActionStatus[] = ["New", "Reviewed", "In progress", "Snoozed", "Resolved", "Dismissed", "Not mine"];
+  if (value.status !== undefined && (!statuses.includes(value.status as ActionStatus))) throw new Error("Invalid action status");
+  if (value.category !== undefined && !ACTION_CATEGORIES.includes(value.category as (typeof ACTION_CATEGORIES)[number])) throw new Error("Invalid action category");
+  if (value.confidence !== undefined && !["High", "Medium", "Low"].includes(value.confidence as string)) throw new Error("Invalid confidence");
+  if (value.owner !== undefined && (typeof value.owner !== "string" || value.owner.length > 200)) throw new Error("Invalid owner");
+  if (value.dueDate !== undefined && value.dueDate !== null && (typeof value.dueDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value.dueDate))) throw new Error("Invalid due date");
+  return value as ActionFeedbackInput;
 }

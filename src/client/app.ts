@@ -1,5 +1,12 @@
 import type {
+  ActionCandidateView,
+  ActionCategory,
+  ActionFeedbackInput,
+  ActionStatus,
+  AnalysisReadiness,
+  ConfidenceLevel,
   HealthResponse,
+  InsightDashboard,
   PublicConfiguration,
   ScanStatus,
   SchedulerStatus,
@@ -9,6 +16,7 @@ import type {
   WatchedCollectionCatalog,
   WatchedCollectionView,
 } from "../shared/contracts.js";
+import { ACTION_CATEGORIES } from "../shared/contracts.js";
 
 const statusElement = requiredElement("service-status");
 const modelElement = requiredElement("model-status");
@@ -24,6 +32,9 @@ const collectionSelect = requiredSelect("collection-select");
 const saveCollectionSpacesButton = requiredButton("save-collection-spaces");
 const collectionForm = requiredForm("collection-form");
 const scanNowButton = requiredButton("scan-now");
+const retentionAccept = requiredInput("retention-accept");
+const retentionConfirm = requiredButton("retention-confirm");
+const refreshInsightsButton = requiredButton("refresh-insights");
 let currentSpaces: WebexSpaceCatalog["spaces"] = [];
 let currentCollections: WatchedCollectionView[] = [];
 
@@ -41,22 +52,26 @@ collectionForm.addEventListener("submit", (event) => {
   void createCollection();
 });
 scanNowButton.addEventListener("click", () => void startScan());
+retentionAccept.addEventListener("change", () => { retentionConfirm.disabled = !retentionAccept.checked; });
+retentionConfirm.addEventListener("click", () => void confirmRetention());
+refreshInsightsButton.addEventListener("click", () => void loadInsights());
 
 void loadDashboard();
 
 async function loadDashboard(): Promise<void> {
   try {
-    const [health, configuration, webex, scheduler, scan] = await Promise.all([
+    const [health, configuration, webex, scheduler, scan, readiness] = await Promise.all([
       fetchJson<HealthResponse>("/api/health"),
       fetchJson<PublicConfiguration>("/api/configuration"),
       fetchJson<WebexConnectionStatus>("/api/webex/status"),
       fetchJson<SchedulerStatus>("/api/scheduler/status"),
       fetchJson<ScanStatus>("/api/scans/current"),
+      fetchJson<AnalysisReadiness>("/api/analysis/readiness"),
     ]);
 
     statusElement.textContent = `${health.status.toUpperCase()} · v${health.version}`;
     statusElement.dataset.state = "ok";
-    modelElement.textContent = `${configuration.modelName} · ${configuration.modelEnabled ? "configured" : "setup required"}`;
+    modelElement.textContent = `${configuration.modelName} · ${readiness.enabled ? "ready" : "setup required"}`;
     scheduleElement.textContent = scheduler.nextRunAt === undefined
       ? `Every ${configuration.scanIntervalMinutes} minutes · app-open only`
       : `Next ${new Date(scheduler.nextRunAt).toLocaleString()} · app-open only`;
@@ -70,11 +85,35 @@ async function loadDashboard(): Promise<void> {
       ? "Included"
       : "Excluded";
     renderWebexStatus(webex);
+    renderAnalysisReadiness(readiness);
     renderScanStatus(scan);
-    await loadCollections();
+    await Promise.all([loadCollections(), loadInsights()]);
   } catch {
     statusElement.textContent = "Service unavailable";
     statusElement.dataset.state = "error";
+  }
+}
+
+function renderAnalysisReadiness(readiness: AnalysisReadiness): void {
+  requiredElement("retention-disclosure-link").setAttribute("href", readiness.disclosureUrl);
+  retentionAccept.checked = readiness.retentionAcknowledged;
+  retentionAccept.disabled = readiness.retentionAcknowledged;
+  retentionConfirm.disabled = readiness.retentionAcknowledged || !retentionAccept.checked;
+  retentionConfirm.hidden = readiness.retentionAcknowledged;
+  requiredElement("analysis-readiness").textContent = readiness.enabled
+    ? `${readiness.modelName} is ready. Future selected-space scans will generate local insights.`
+    : !readiness.credentialConfigured
+      ? "OpenAI API key not found in the configured macOS Keychain entry. Analysis will be skipped safely."
+      : "The local retention acknowledgment is required before message content can leave this device.";
+}
+
+async function confirmRetention(): Promise<void> {
+  retentionConfirm.disabled = true;
+  try {
+    renderAnalysisReadiness(await postJson<AnalysisReadiness>("/api/analysis/acknowledgement", { accepted: true }));
+  } catch {
+    requiredElement("analysis-readiness").textContent = "The local acknowledgment could not be saved.";
+    retentionConfirm.disabled = false;
   }
 }
 
@@ -239,9 +278,160 @@ async function pollScan(): Promise<void> {
   for (let attempt = 0; attempt < 3_600; attempt += 1) {
     const status = await fetchJson<ScanStatus>("/api/scans/current");
     renderScanStatus(status);
-    if (status.state !== "running") return;
+    if (status.state !== "running") {
+      await loadInsights();
+      return;
+    }
     await new Promise((resolve) => window.setTimeout(resolve, 1_000));
   }
+}
+
+async function loadInsights(): Promise<void> {
+  try {
+    const dashboard = await fetchJson<InsightDashboard>("/api/insights");
+    renderActions(dashboard.actions);
+    renderSummaries(dashboard.summaries);
+  } catch {
+    requiredElement("action-list").replaceChildren(paragraph("Insights could not be loaded from the local store."));
+  }
+}
+
+function renderActions(actions: readonly ActionCandidateView[]): void {
+  const list = requiredElement("action-list");
+  if (actions.length === 0) {
+    list.replaceChildren(paragraph("No active action candidates yet. Run a model-enabled scan after selecting spaces."));
+    return;
+  }
+  list.replaceChildren(...actions.map(actionCard));
+}
+
+function actionCard(action: ActionCandidateView): HTMLElement {
+  const article = document.createElement("article");
+  article.className = "action-card";
+  const header = document.createElement("header");
+  const heading = document.createElement("div");
+  const title = document.createElement("h3");
+  title.textContent = action.recommendedNextStep || action.category;
+  const location = paragraph(`${action.spaceTitle} · ${new Date(action.sourceTimestamp).toLocaleString()}`);
+  heading.append(title, location);
+  const chips = document.createElement("div");
+  chips.className = "chips";
+  chips.append(chip(action.category), chip(`${action.confidence} confidence`), chip(action.status));
+  if (action.stale) chips.append(chip("Needs re-review"));
+  for (const collection of action.collectionNames) chips.append(chip(collection));
+  header.append(heading, chips);
+  const rationale = paragraph(action.rationale);
+  const source = document.createElement("div");
+  source.className = "source-block";
+  const sourceLink = document.createElement("a");
+  sourceLink.href = action.sourceUrl;
+  sourceLink.textContent = "Open source space";
+  const quote = document.createElement("blockquote");
+  quote.textContent = action.sourceSnippet;
+  const reference = document.createElement("small");
+  const sourceReference = `${action.spaceTitle} · ${action.sourceAuthor} · ${new Date(action.sourceTimestamp).toLocaleString()} · source ${action.sourceMessageId}`;
+  reference.textContent = sourceReference;
+  const copyReference = document.createElement("button");
+  copyReference.type = "button";
+  copyReference.className = "copy-reference";
+  copyReference.textContent = "Copy source reference";
+  copyReference.addEventListener("click", () => {
+    void navigator.clipboard.writeText(sourceReference)
+      .then(() => { copyReference.textContent = "Copied"; })
+      .catch(() => { copyReference.textContent = "Copy failed"; });
+  });
+  const warning = paragraph(action.compatibilityWarning);
+  warning.className = "compatibility-warning";
+  const context = document.createElement("details");
+  const contextLabel = document.createElement("summary");
+  contextLabel.textContent = "Show nearby context";
+  const contextText = document.createElement("pre");
+  contextText.textContent = action.contextPreview;
+  context.append(contextLabel, contextText);
+  source.append(sourceLink, quote, reference, copyReference, warning, context);
+  article.append(header, rationale, source, feedbackForm(action));
+  return article;
+}
+
+function feedbackForm(action: ActionCandidateView): HTMLFormElement {
+  const form = document.createElement("form");
+  form.className = "feedback-form";
+  const status = selectField("Status", ["New", "Reviewed", "In progress", "Snoozed", "Resolved", "Dismissed", "Not mine"], action.status);
+  const category = selectField("Category", ACTION_CATEGORIES, action.category);
+  const owner = inputField("Owner", "text", action.owner);
+  const due = inputField("Due date", "date", action.dueDate?.slice(0, 10) ?? "");
+  const confidence = selectField("Confidence", ["High", "Medium", "Low"], action.confidence);
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.textContent = "Save review";
+  form.append(status.label, category.label, owner.label, due.label, confidence.label, save);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    save.disabled = true;
+    const input: ActionFeedbackInput = {
+      status: status.select.value as ActionStatus,
+      category: category.select.value as ActionCategory,
+      owner: owner.input.value,
+      dueDate: due.input.value === "" ? null : due.input.value,
+      confidence: confidence.select.value as ConfidenceLevel,
+    };
+    void postJson<ActionCandidateView>(`/api/actions/${action.id}`, input)
+      .then(loadInsights)
+      .catch(() => { save.textContent = "Retry save"; save.disabled = false; });
+  });
+  return form;
+}
+
+function renderSummaries(summaries: InsightDashboard["summaries"]): void {
+  const list = requiredElement("summary-list");
+  if (summaries.length === 0) {
+    list.replaceChildren(paragraph("No summaries yet. Analysis runs after Webex ingestion when model setup is complete."));
+    return;
+  }
+  list.replaceChildren(...summaries.map((summary) => {
+    const article = document.createElement("article");
+    article.className = "summary-card";
+    const title = document.createElement("h3");
+    title.textContent = summary.spaceTitle;
+    const period = paragraph(`${new Date(summary.periodStart).toLocaleString()} – ${new Date(summary.periodEnd).toLocaleString()} · ${summary.coverage} coverage${summary.stale ? " · Needs re-review" : ""}`);
+    const overview = paragraph(summary.noMaterialActivity ? "No material activity in this period." : summary.overview);
+    article.append(title, period, overview);
+    const groups: Array<[string, readonly string[]]> = [
+      ["Main topics", summary.mainTopics], ["Decisions", summary.decisions],
+      ["Open questions", summary.openQuestions], ["Risks", summary.risks],
+      ["Your actions", summary.userActions], ["Other actions", summary.otherActions],
+      ["Important links", summary.importantLinks],
+    ];
+    for (const [label, items] of groups) if (items.length > 0) article.append(detailList(label, items));
+    return article;
+  }));
+}
+
+function detailList(label: string, items: readonly string[]): HTMLDetailsElement {
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = `${label} (${items.length})`;
+  const list = document.createElement("ul");
+  for (const item of items) { const entry = document.createElement("li"); entry.textContent = item; list.append(entry); }
+  details.append(summary, list);
+  return details;
+}
+
+function chip(text: string): HTMLSpanElement {
+  const element = document.createElement("span"); element.className = "chip"; element.textContent = text; return element;
+}
+
+function selectField(labelText: string, values: readonly string[], selected: string): { label: HTMLLabelElement; select: HTMLSelectElement } {
+  const label = document.createElement("label"); label.append(document.createTextNode(labelText));
+  const select = document.createElement("select");
+  for (const value of values) select.append(new Option(value, value, false, value === selected));
+  label.append(select); return { label, select };
+}
+
+function inputField(labelText: string, type: string, value: string): { label: HTMLLabelElement; input: HTMLInputElement } {
+  const label = document.createElement("label"); label.append(document.createTextNode(labelText));
+  const input = document.createElement("input"); input.type = type; input.value = value; input.maxLength = 200;
+  label.append(input); return { label, input };
 }
 
 function renderScanStatus(status: ScanStatus): void {

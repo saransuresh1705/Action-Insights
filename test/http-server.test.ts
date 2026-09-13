@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { DEFAULT_CONFIGURATION } from "../src/server/config.js";
 import { assertLoopbackHost, createApplicationServer } from "../src/server/http-server.js";
 import { SafeLogger } from "../src/server/safe-logger.js";
-import type { CollectionFacade, WebexFacade } from "../src/server/http-server.js";
+import type { AnalysisFacade, CollectionFacade, WebexFacade } from "../src/server/http-server.js";
 
 const collectionId = "11111111-1111-4111-8111-111111111111";
 const collections: CollectionFacade = {
@@ -205,4 +205,59 @@ test("updates the catalog activity window through the protected local configurat
     body: JSON.stringify({ activityWindowDays: 0 }),
   });
   assert.equal(invalid.status, 400);
+});
+
+test("protects analysis acknowledgement and local action feedback routes", async (context) => {
+  let acknowledged = false;
+  let receivedStatus = "";
+  const analysis: AnalysisFacade = {
+    async readiness() {
+      return {
+        modelName: "gpt-5.6-sol", credentialConfigured: true,
+        retentionAcknowledged: acknowledged, enabled: acknowledged,
+        disclosureUrl: "https://developers.openai.com/api/docs/guides/your-data",
+      };
+    },
+    acknowledgeRetention() { acknowledged = true; },
+    list() { return { summaries: [], actions: [] }; },
+    updateAction(id, input) {
+      receivedStatus = input.status ?? "";
+      if (id !== "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") return null;
+      return {
+        id, roomId: "room", spaceTitle: "Space", collectionNames: [], category: "Reply required",
+        status: input.status ?? "New", confidence: "High", confidenceScore: 0.9, rationale: "Reason",
+        owner: "You", dueDateInferred: false, urgency: "normal", dependencies: [], recommendedNextStep: "Reply",
+        sourceMessageId: "message", sourceAuthor: "Participant", sourceTimestamp: "2026-09-12T00:00:00.000Z",
+        sourceSnippet: "Snippet", sourceUrl: "webexteams://im?space=room", compatibilityWarning: "Warning",
+        contextPreview: "Context", evidenceMessageIds: ["message"], modelName: "gpt-5.6-sol",
+        analyzedAt: "2026-09-12T00:00:00.000Z", stale: false,
+      };
+    },
+  };
+  const server = createApplicationServer(DEFAULT_CONFIGURATION, {
+    publicDirectory: resolve(process.cwd(), "public"), sessionToken: "analysis-session-token",
+    analysis, logger: new SafeLogger(() => undefined),
+  });
+  context.after(() => server.close());
+  await new Promise<void>((resolveListening, reject) => {
+    server.once("error", reject); server.listen(0, "127.0.0.1", resolveListening);
+  });
+  const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const cookie = "action_insights_session=analysis-session-token";
+  const readiness = await fetch(`${baseUrl}/api/analysis/readiness`, { headers: { Cookie: cookie } });
+  assert.equal(readiness.status, 200);
+  assert.equal(((await readiness.json()) as { enabled: boolean }).enabled, false);
+  const acknowledge = await fetch(`${baseUrl}/api/analysis/acknowledgement`, {
+    method: "POST", headers: { Cookie: cookie, "X-Action-Insights-Request": "1", "Content-Type": "application/json" },
+    body: JSON.stringify({ accepted: true }),
+  });
+  assert.equal(acknowledge.status, 200);
+  assert.equal(((await acknowledge.json()) as { enabled: boolean }).enabled, true);
+  const feedback = await fetch(`${baseUrl}/api/actions/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`, {
+    method: "POST", headers: { Cookie: cookie, "X-Action-Insights-Request": "1", "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "Reviewed" }),
+  });
+  assert.equal(feedback.status, 200);
+  assert.equal(receivedStatus, "Reviewed");
 });

@@ -1,5 +1,5 @@
 export const APP_NAME = "Webex Action Insights";
-export const APP_VERSION = "0.3.0";
+export const APP_VERSION = "0.4.0";
 
 export type ReasoningEffort = "medium" | "high";
 
@@ -87,6 +87,99 @@ export interface SchedulerStatus {
   readonly intervalMinutes: number;
   readonly nextRunAt?: string;
   readonly mode: "app-open";
+}
+
+export const ACTION_CATEGORIES = [
+  "Reply required",
+  "Acknowledgement",
+  "Decision / approval",
+  "Review / feedback",
+  "External work item",
+  "Research / information",
+  "Meeting / scheduling",
+  "Follow-up / reminder",
+  "Blocker / dependency",
+  "Risk / escalation",
+  "Delegation candidate",
+  "FYI / no action",
+  "Ambiguous",
+] as const;
+
+export type ActionCategory = (typeof ACTION_CATEGORIES)[number];
+export type ActionStatus = "New" | "Reviewed" | "In progress" | "Snoozed" | "Resolved" | "Dismissed" | "Not mine";
+export type ConfidenceLevel = "High" | "Medium" | "Low";
+
+export interface AnalysisReadiness {
+  readonly modelName: string;
+  readonly credentialConfigured: boolean;
+  readonly retentionAcknowledged: boolean;
+  readonly enabled: boolean;
+  readonly disclosureUrl: string;
+}
+
+export interface SpaceSummaryView {
+  readonly id: string;
+  readonly roomId: string;
+  readonly spaceTitle: string;
+  readonly periodStart: string;
+  readonly periodEnd: string;
+  readonly coverage: "complete" | "partial";
+  readonly overview: string;
+  readonly mainTopics: readonly string[];
+  readonly decisions: readonly string[];
+  readonly openQuestions: readonly string[];
+  readonly risks: readonly string[];
+  readonly userActions: readonly string[];
+  readonly otherActions: readonly string[];
+  readonly importantLinks: readonly string[];
+  readonly noMaterialActivity: boolean;
+  readonly evidenceMessageIds: readonly string[];
+  readonly modelName: string;
+  readonly analyzedAt: string;
+  readonly stale: boolean;
+}
+
+export interface ActionCandidateView {
+  readonly id: string;
+  readonly roomId: string;
+  readonly spaceTitle: string;
+  readonly collectionNames: readonly string[];
+  readonly category: ActionCategory;
+  readonly secondaryCategory?: ActionCategory;
+  readonly status: ActionStatus;
+  readonly confidence: ConfidenceLevel;
+  readonly confidenceScore: number;
+  readonly rationale: string;
+  readonly owner: string;
+  readonly dueDate?: string;
+  readonly dueDateInferred: boolean;
+  readonly urgency: "low" | "normal" | "high";
+  readonly dependencies: readonly string[];
+  readonly recommendedNextStep: string;
+  readonly sourceMessageId: string;
+  readonly sourceAuthor: string;
+  readonly sourceTimestamp: string;
+  readonly sourceSnippet: string;
+  readonly sourceUrl: string;
+  readonly compatibilityWarning: string;
+  readonly contextPreview: string;
+  readonly evidenceMessageIds: readonly string[];
+  readonly modelName: string;
+  readonly analyzedAt: string;
+  readonly stale: boolean;
+}
+
+export interface InsightDashboard {
+  readonly summaries: readonly SpaceSummaryView[];
+  readonly actions: readonly ActionCandidateView[];
+}
+
+export interface ActionFeedbackInput {
+  readonly status?: ActionStatus;
+  readonly category?: ActionCategory;
+  readonly owner?: string;
+  readonly dueDate?: string | null;
+  readonly confidence?: ConfidenceLevel;
 }
 
 export interface HealthResponse {

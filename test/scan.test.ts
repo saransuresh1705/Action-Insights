@@ -14,6 +14,7 @@ test("scans only spaces selected through Watched Collections and advances cursor
   database.createCollection("collection-1", "Priorities");
   database.replaceCollectionSpaces("collection-1", ["selected-room"]);
   const requestedRooms: string[] = [];
+  const analyzedRooms: string[] = [];
   const ingestion: MessageIngestion = {
     async ingestSince(roomId) {
       requestedRooms.push(roomId);
@@ -39,12 +40,14 @@ test("scans only spaces selected through Watched Collections and advances cursor
     ingestion,
     database,
     new SafeLogger(() => undefined),
+    { async analyze(roomId) { analyzedRooms.push(roomId); return "analyzed"; } },
   );
 
   coordinator.start();
   await waitForFinished(coordinator);
 
   assert.deepEqual(requestedRooms, ["selected-room"]);
+  assert.deepEqual(analyzedRooms, ["selected-room"]);
   assert.equal(coordinator.status().state, "complete");
   assert.equal(coordinator.status().messagesIngested, 1);
   assert.equal(database.getCursor("selected-room")?.highWatermark, "2026-09-12T10:00:00.000Z");

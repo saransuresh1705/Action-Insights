@@ -13,6 +13,10 @@ export interface MessageIngestion {
   ingestSince(roomId: string, accessToken: string, since: Date, signal?: AbortSignal): Promise<IngestionBatch>;
 }
 
+export interface SpaceAnalyzer {
+  analyze(roomId: string, signal?: AbortSignal): Promise<"analyzed" | "skipped">;
+}
+
 export class ScanCoordinator {
   private current: ScanStatus = idleStatus();
   private cancellation: AbortController | null = null;
@@ -23,6 +27,7 @@ export class ScanCoordinator {
     private readonly ingestion: MessageIngestion,
     private readonly database: LocalDatabase,
     private readonly logger: SafeLogger,
+    private readonly analyzer?: SpaceAnalyzer,
   ) {}
 
   public status(): ScanStatus {
@@ -85,6 +90,7 @@ export class ScanCoordinator {
           const batch = await this.ingestion.ingestSince(roomId, accessToken, since, signal);
           const highWatermark = batch.highWatermark ?? new Date().toISOString();
           this.database.saveMessagesAndCursor(roomId, batch.messages, highWatermark, "complete");
+          await this.analyzer?.analyze(roomId, signal);
           completed += 1;
           messagesIngested += batch.messages.length;
         } catch (error: unknown) {
@@ -103,6 +109,7 @@ export class ScanCoordinator {
         spacesCompleted: completed,
         spacesFailed: failed,
         messagesIngested,
+        ...(failed > 0 ? { warning: "One or more spaces could not be fully ingested or analyzed. Existing insights were preserved." } : {}),
       };
       this.logger.info("scan_completed", {
         status: state,
@@ -113,6 +120,8 @@ export class ScanCoordinator {
       });
       const cutoff = new Date(Date.now() - this.configuration.retention.rawMessageDays * 86_400_000).toISOString();
       this.database.purgeRawMessageTextBefore(cutoff);
+      const derivedCutoff = new Date(Date.now() - this.configuration.retention.derivedInsightDays * 86_400_000).toISOString();
+      this.database.purgeDerivedInsightsBefore(derivedCutoff);
     } catch (error: unknown) {
       this.current = {
         ...this.current,

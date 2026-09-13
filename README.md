@@ -20,9 +20,11 @@ The current foundation includes:
 - a configurable 30-day recent-activity catalog filter that preserves selected older spaces;
 - encrypted SQLite storage for message text and sensitive display names;
 - app-local Watched Collections and manual incremental scans; and
-- an accessible local dashboard for connection, discovery, selection, and scan progress.
+- a constrained OpenAI Responses adapter with structured outputs, evidence grounding, and minimized-storage controls;
+- encrypted per-space summaries and action candidates with locally preserved review feedback; and
+- an accessible local dashboard for connection, discovery, selection, summaries, action review, and scan progress.
 
-Collection management refinements, deletion reconciliation, derived-data retention, model orchestration, and read-only enterprise connectors remain future implementation slices.
+Response drafting, read-only enterprise connectors, deletion reconciliation, and production hardening remain future implementation slices.
 
 ## Prerequisites
 
@@ -58,6 +60,18 @@ security add-generic-password -U -a webex-oauth -s webex-action-insights -w
 After OAuth completes, access and refresh tokens are kept in the same Keychain item. Disconnect removes those tokens while retaining the integration client secret so the account can be reconnected.
 
 The application never downloads Webex attachments. It records only whether a message has an attachment.
+
+## OpenAI analysis setup
+
+Phase 2 uses the approved `gpt-5.6-sol` Responses API profile. Store the API key in the configured macOS Keychain entry using this prompt-based command; enter the key only at the Keychain prompt so it is not written to the command or shell history.
+
+```sh
+security add-generic-password -U -a openai -s webex-action-insights -w
+```
+
+Then open the local app and accept the first-use external-processing disclosure. Until both the Keychain entry and local acknowledgment exist, Webex ingestion continues but model analysis is skipped. Each request is single-space, foreground, and stateless; it sets `store: false`, disables background mode, uses explicit prompt caching without a cache key, supplies no tools, and validates all cited message IDs locally.
+
+Selected message content leaves the device for OpenAI processing and is subject to OpenAI's accepted default API retention. The app does not write model request or response content to logs or any non-local application store.
 
 ## Commands
 
