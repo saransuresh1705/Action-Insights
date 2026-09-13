@@ -6,14 +6,19 @@ export class WebexReadOnlyClient {
   public constructor(private readonly http: WebexReadOnlyHttpClient) {}
 
   public async listSpaces(accessToken: string, signal?: AbortSignal): Promise<readonly WebexSpaceSummary[]> {
-    const rooms = await this.collectPages<WebexRoom>(`${WEBEX_API_ORIGIN}/v1/rooms?max=100&sortBy=lastactivity`, accessToken, signal);
-    return rooms.map((room) => ({
-      id: room.id,
-      title: room.title,
-      type: room.type,
-      ...(room.lastActivity === undefined ? {} : { lastActivity: room.lastActivity }),
-      selected: false,
-    }));
+    // Webex documents lastactivity ordering as unreliable for memberships above
+    // 3,000 spaces. Enumerate by the stable room ID and apply the user-friendly
+    // recent-activity order only after the full catalog is available locally.
+    const rooms = await this.collectPages<WebexRoom>(`${WEBEX_API_ORIGIN}/v1/rooms?max=1000&sortBy=id`, accessToken, signal);
+    return rooms
+      .map((room) => ({
+        id: room.id,
+        title: room.title,
+        type: room.type,
+        ...(room.lastActivity === undefined ? {} : { lastActivity: room.lastActivity }),
+        selected: false,
+      }))
+      .sort(compareSpacesByRecentActivity);
   }
 
   public async listMessagePages(
@@ -55,6 +60,16 @@ export class WebexReadOnlyClient {
     }
     return items;
   }
+}
+
+function compareSpacesByRecentActivity(left: WebexSpaceSummary, right: WebexSpaceSummary): number {
+  if (left.lastActivity !== right.lastActivity) {
+    if (left.lastActivity === undefined) return 1;
+    if (right.lastActivity === undefined) return -1;
+    const activityOrder = right.lastActivity.localeCompare(left.lastActivity);
+    if (activityOrder !== 0) return activityOrder;
+  }
+  return left.id.localeCompare(right.id);
 }
 
 function messageListUrl(roomId: string): string {
